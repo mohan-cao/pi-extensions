@@ -1,7 +1,17 @@
-import { createProvider, openAICompletionsApi } from "@earendil-works/pi-ai";
+import { createProvider } from "@earendil-works/pi-ai";
+import type { ProviderStreams } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export const JEV_PROVIDER_ID = "jev-response-router";
+
+function unsupportedModelStream(): never {
+  throw new Error("The Jev response router provider is auth-only and has no chat models.");
+}
+
+const authOnlyApi: ProviderStreams = {
+  stream: unsupportedModelStream,
+  streamSimple: unsupportedModelStream,
+};
 
 export function registerJevAuthProvider(pi: ExtensionAPI): void {
   pi.registerProvider(
@@ -42,7 +52,7 @@ export function registerJevAuthProvider(pi: ExtensionAPI): void {
       models: [],
       // Jev is NOT invoked through this API implementation. The provider exists
       // only so Pi can own /login, credential storage, and auth resolution.
-      api: openAICompletionsApi(),
+      api: authOnlyApi,
     }),
   );
 }

@@ -1,45 +1,47 @@
-# @mohan-cao/pi-jev-response-router
+## @mohan-cao/pi-jev-response-router
 
-I'm afraid this is vibed. Apologies.
+pi extension that calls jev bush before each agent run and selects one of three response policies:
 
-## Why `before_agent_start` instead of rewriting user input?
+- `bounded_verification` at most three concrete claims/questions; answer with correct / partially correct / incorrect plus concise corrections.
+- `decomposition_required` important assumptions or tradeoffs materially affect the answer; decompose/normalize first then generate
+- `normal` leave Pi's normal response behavior unchanged.
 
-The classifier runs in Pi's `before_agent_start` hook after skill/template expansion. The selected policy is appended to the **system prompt for that run**, while the original user message remains untouched. This avoids making the policy part of user content and works cleanly with normal Pi session history.
+jev is called through its native HTTP api and is not registered as a chat model for obvious reasons. The extension registers an auth-only pi provider so `/login` can store and resolve the jev API key using Pi's normal auth bullshit.
 
-## Development
-
-This repository is an npm workspace. From the repository root:
-
-```bash
-npm install
-npm run build
-npm test
-```
-
-For a user-local Pi install directly from the working tree:
+### Install from npm
 
 ```bash
-pi install ./packages/pi-jev-response-router
+pi install npm:@mohan-cao/pi-jev-response-router
 ```
 
-Pi installs local packages into user settings by default. Use `-l` only if you want a project-local Pi package registration instead.
+then start Pi and run `/login`. then select **TypeSafe Jev (response router)** and paste the TypeSafe API key.
 
-To produce an npm tarball:
+you can also provide `TYPESAFE_API_KEY` in the environment... this will be ignored in favour of explicitly stored `/login` keys.
 
-```bash
-npm run pack:router
+### Commands
+
+```text
+/jev-router status
+/jev-router on
+/jev-router off
+/jev-router debug on
+/jev-router debug off
+/jev-router classify UDP preserves datagram boundaries, right?
 ```
 
-To publish the scoped package:
+`/jev-router classify ...` lets you demo the Jev route without invoking the main model.
 
-2. `npm login`
-3. `npm run build && npm test`
-4. `npm run publish:router`
-5. Install it with `pi install npm:@your-scope/pi-jev-response-router`.
+### Configuration
 
-> npm scoped package syntax is `@scope/package`, not `@scope:package`.
+All configuration is optional:
 
-## Future Langfuse loop
+| Environment variable | Default | Meaning |
+| --- | --- | --- |
+| `TYPESAFE_API_KEY` | unset | Fallback Jev credential when no `/login` key is stored |
+| `PI_JEV_ENDPOINT` | `https://api.typesafe.ai/v1/systemone` | Native System One endpoint |
+| `PI_JEV_MODEL` | `jev-latest` | Jev model selector |
+| `PI_JEV_ROUTER_TIMEOUT_MS` | `10000` | Per-request HTTP timeout |
+| `PI_JEV_ROUTER_RETRIES` | `2` | Retries for HTTP 429/529 |
+| `PI_JEV_ROUTER_MIN_CONFIDENCE` | `0` | Ignore specialized routes below this Jev confidence |
 
-The current classifier prompt is isolated in `src/prompt.ts`. That is the intended seam for a future Langfuse `getPrompt()` / iterative research process. Replace the static instructions/criteria provider without changing Pi auth, Jev transport, policy injection, or package installation.
-
+The router fails silently and the default answer mode will be picked (if Jev is unavailable, unauthenticated, or returns an invalid schema). Turn on debug notifications if you want failures and route decisions surfaced in the TUI.
