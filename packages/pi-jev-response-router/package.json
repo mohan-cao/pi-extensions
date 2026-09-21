@@ -1,0 +1,48 @@
+{
+  "name": "@mohan-cao/pi-jev-response-router",
+  "version": "0.1.0",
+  "description": "Pi extension that uses TypeSafe Jev to route each request into bounded verification, decomposition, or normal response policy.",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "jev",
+    "typesafe-ai",
+    "classifier",
+    "response-router"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "pi": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "build:unchecked": "tsc -p tsconfig.json --noCheck",
+    "test": "node --test test/*.test.mjs",
+    "prepack": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

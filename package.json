@@ -1,0 +1,26 @@
+{
+  "name": "pi-jev-response-router-workspace",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "clean": "npm run clean --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "build:unchecked": "npm run build:unchecked --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "pack:router": "node ./scripts/pack-router.mjs",
+    "publish:router": "npm publish ./packages/pi-jev-response-router --access public"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "0.86.0",
+    "@earendil-works/pi-coding-agent": "0.86.0",
+    "typescript": "5.8.3",
+    "@types/node": "^22.0.0"
+  }
+}
