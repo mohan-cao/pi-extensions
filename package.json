@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@10.18.0",
   "workspaces": [
     "packages/*"
   ],
@@ -10,10 +11,10 @@
     "node": ">=20"
   },
   "scripts": {
-    "clean": "npm run clean --workspaces --if-present",
-    "build": "npm run build --workspaces --if-present",
-    "build:unchecked": "npm run build:unchecked --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
+    "clean": "pnpm -r clean",
+    "build": "pnpm -r build",
+    "build:unchecked": "pnpm -r build:unchecked",
+    "test": "pnpm -r test",
     "pack:router": "node ./scripts/pack-router.mjs",
     "publish:router": "npm publish ./packages/pi-jev-response-router --access public"
   },
