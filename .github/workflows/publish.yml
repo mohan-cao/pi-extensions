@@ -1,9 +1,13 @@
 name: Publish to npm
 
-# Publishes @mohan-cao/pi-jev-response-router when a v* tag is pushed.
+# Publishes a single workspace package when a `<package-name>@<version>` tag is
+# pushed, e.g. @mohan-cao/pi-jev-response-router@0.2.0
+#
+# Per-package tags mean releasing one package never requires bumping or tagging
+# the others, and adding a new package needs no change to this workflow.
 #
 # Auth: npm trusted publishing (OIDC). No NPM_TOKEN secret is required.
-# One-time npm setup (see RELEASING.md):
+# One-time npm setup, per package (the package must exist on npm first):
 #   npmjs.com -> package -> Settings -> Trusted publishing -> GitHub Actions
 #     Organization/user: mohan-cao
 #     Repository:        pi-extensions
@@ -13,7 +17,8 @@ name: Publish to npm
 on:
   push:
     tags:
-      - "v*"
+      # `*` does not match `/`, so `**` is required to span the scope slash.
+      - "**@*"
 
 permissions:
   contents: read
@@ -41,18 +46,17 @@ jobs:
       # The tracked pnpm-lock.yaml is the only lockfile in the repo.
       - run: pnpm install --frozen-lockfile
 
-      - name: Verify tag matches package version
-        run: |
-          pkg_version="$(node -p "require('./packages/pi-jev-response-router/package.json').version")"
-          tag_version="${GITHUB_REF_NAME#v}"
-          if [ "$pkg_version" != "$tag_version" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match package version $pkg_version"
-            exit 1
-          fi
+      # Fails if the tag is not <name>@<version>, names an unknown package, or
+      # disagrees with the manifest version.
+      - name: Resolve package from tag
+        id: pkg
+        run: node scripts/resolve-package.mjs "$GITHUB_REF_NAME"
 
-      - run: pnpm -r build
-      - run: pnpm -r test
+      # `pkg...` includes workspace dependencies, so this stays correct if a
+      # package ever depends on another package in this repo.
+      - run: pnpm --filter "${{ steps.pkg.outputs.name }}..." build
+      - run: pnpm --filter "${{ steps.pkg.outputs.name }}..." --if-present test
 
       # npm (not pnpm) performs the publish so trusted publishing/OIDC works.
       # `prepack` rebuilds the package; provenance is generated automatically.
-      - run: npm publish ./packages/pi-jev-response-router --access public
+      - run: npm publish "./${{ steps.pkg.outputs.dir }}" --access public

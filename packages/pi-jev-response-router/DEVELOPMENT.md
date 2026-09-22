@@ -45,7 +45,7 @@ To produce an npm tarball:
 pnpm pack:router
 ```
 
-To publish the scoped package:
+To publish the scoped package manually:
 
 1. `npm login`
 2. `pnpm build && pnpm test`
@@ -53,9 +53,26 @@ To publish the scoped package:
 4. Install it with `pi install npm:@your-scope/pi-jev-response-router`.
 
 > npm scoped package syntax is `@scope/package`, not `@scope:package`.
->
-> Automated releases use GitHub Actions with npm trusted publishing; see
-> [`RELEASING.md`](./RELEASING.md).
+
+### Releasing via GitHub Actions
+
+Releases are per-package. Bump only the package you are releasing, then tag it
+with `<package-name>@<version>`:
+
+```bash
+git checkout main && git pull
+git tag "@mohan-cao/pi-jev-response-router@0.2.0"
+git push origin "@mohan-cao/pi-jev-response-router@0.2.0"
+```
+
+`.github/workflows/publish.yml` resolves the package from the tag
+(`scripts/resolve-package.mjs`), asserts the tag version matches the manifest,
+builds and tests only that package, then publishes it with npm trusted
+publishing (OIDC, no token, provenance attached).
+
+A repo-wide `v*` tag does **not** trigger a release, and releasing one package
+never requires bumping or tagging the others. Each package needs its own
+one-time trusted-publisher entry on npmjs.com pointing at `publish.yml`.
 
 ## Future Langfuse loop
 
