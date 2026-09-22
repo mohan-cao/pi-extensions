@@ -1,4 +1,5 @@
 # pi-extensions
+
 :3
 
 welcome... to my abode..
@@ -7,13 +8,32 @@ my collection of slop..
 
 ## @mohan-cao/pi-jev-response-router
 
-pi extension that calls jev bush before each agent run and selects one of three response policies:
+pi extension that calls Jev before each agent run and selects a response policy.
 
-- `bounded_verification` at most three concrete claims/questions; answer with correct / partially correct / incorrect plus concise corrections.
-- `decomposition_required` important assumptions or tradeoffs materially affect the answer; decompose/normalize first then generate
-- `normal` leave Pi's normal response behavior unchanged.
+- `bounded_verification` — at most three concrete claims/questions; answer with
+  correct / partially correct / incorrect plus concise corrections.
+- `decomposition_required` — important assumptions or tradeoffs materially affect
+  the answer; decompose first, then synthesize.
+- `normal` — leave Pi's normal response behavior unchanged.
 
-jev is called through its native HTTP api and is not registered as a chat model for obvious reasons. The extension registers an auth-only pi provider so `/login` can store and resolve the jev API key using Pi's normal auth bullshit.
+Jev is called through its native HTTP API and is not registered as a chat model
+for obvious reasons. The extension registers an auth-only pi provider so `/login`
+can store and resolve the Jev API key using Pi's normal auth flow.
+
+### How routing works
+
+Rather than one mutually exclusive 3-way Choice (where `normal` competes in the
+argmax), the classifier asks **two narrow Noul questions**:
+
+1. `requires_decomposition` — does a reliable answer require decomposition?
+2. `bounded_verification` — is this at most three independently checkable claims?
+
+The mode is then composed in code with **decomposition taking precedence**, and
+`normal` as the residual. This is what keeps decomposition-shaped requests from
+being misrouted as normal.
+
+A bounded slice of recent conversation is included in Jev's `state`, so follow-up
+requests are classifiable in context.
 
 ### Install from npm
 
@@ -21,9 +41,11 @@ jev is called through its native HTTP api and is not registered as a chat model 
 pi install npm:@mohan-cao/pi-jev-response-router
 ```
 
-then start Pi and run `/login`. then select **TypeSafe Jev (response router)** and paste the TypeSafe API key.
+then start Pi and run `/login`, select **TypeSafe Jev (response router)** and
+paste the TypeSafe API key.
 
-you can also provide `TYPESAFE_API_KEY` in the environment... this will be ignored in favour of explicitly stored `/login` keys.
+You can also provide `TYPESAFE_API_KEY` in the environment. An explicitly stored
+`/login` key takes precedence.
 
 ### Commands
 
@@ -37,7 +59,8 @@ you can also provide `TYPESAFE_API_KEY` in the environment... this will be ignor
 /jev-router classify UDP preserves datagram boundaries, right?
 ```
 
-`/jev-router classify ...` lets you demo the Jev route without invoking the main model.
+`/jev-router classify ...` lets you demo the Jev route without invoking the main
+model.
 
 ### Performance
 
@@ -61,8 +84,16 @@ All configuration is optional:
 | `PI_JEV_MODEL` | `jev-latest` | Jev model selector |
 | `PI_JEV_ROUTER_TIMEOUT_MS` | `5000` | Per-request HTTP timeout |
 | `PI_JEV_ROUTER_RETRIES` | `2` | Retries for HTTP 429/529 |
-| `PI_JEV_ROUTER_MIN_CONFIDENCE` | `0` | Ignore specialized routes below this Jev confidence |
+| `PI_JEV_ROUTER_DECOMPOSITION_THRESHOLD` | `0.5` | P(decomposition) at or above which decomposition wins |
+| `PI_JEV_ROUTER_BOUNDED_THRESHOLD` | `0.6` | P(bounded verification) at or above which bounded verification wins |
+| `PI_JEV_ROUTER_HISTORY_TURNS` | `4` | Prior turns included in Jev state (0 disables) |
 | `PI_JEV_ROUTER_CACHE_TTL_MS` | `300000` | Classification cache TTL (0 disables) |
 | `PI_JEV_ROUTER_CACHE_MAX` | `64` | Classification cache entry cap |
 
-The router fails silently and the default answer mode will be picked (if Jev is unavailable, unauthenticated, or returns an invalid schema). Turn on debug notifications if you want failures and route decisions surfaced in the TUI.
+`PI_JEV_ROUTER_MIN_CONFIDENCE` is deprecated. In `0.1.x` it was effectively a
+no-op (confidence is in `[0, 1]` and the default was `0`). It now serves as a
+shared fallback default for the two real thresholds when they are unset.
+
+The router fails silently: if Jev is unavailable, unauthenticated, or returns an
+invalid schema, Pi answers normally. Turn on debug notifications to surface
+failures and route decisions in the TUI.

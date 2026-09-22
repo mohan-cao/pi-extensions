@@ -2,6 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 
 import { TtlCache } from "./cache.js";
 import { loadConfig } from "./config.js";
+import { recentHistory } from "./context.js";
 import { classifyWithJev } from "./jev-client.js";
 import { policyFor } from "./policies.js";
 import { JEV_PROVIDER_ID, registerJevAuthProvider } from "./provider.js";
@@ -11,8 +12,9 @@ import type { ClassificationResult } from "./types.js";
 const POLICY_SECTION = "jev-response-policy";
 
 function formatDecision(result: ClassificationResult): string {
-  const probability = result.probabilities[result.mode] ?? 0;
-  return `${result.mode} (confidence=${result.confidence.toFixed(3)}, p=${probability.toFixed(3)})`;
+  const { decomposition, boundedVerification } = result.signals;
+  const suffix = result.cached ? ", cached" : "";
+  return `${result.mode} (p_decomp=${decomposition.toFixed(3)}, p_bounded=${boundedVerification.toFixed(3)}${suffix})`;
 }
 
 export default function piJevResponseRouter(pi: ExtensionAPI): void {
@@ -87,7 +89,15 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         ? `authenticated (${auth.source ?? "configured"})`
         : "not authenticated";
       ctx.ui.notify(
-        `Jev router: ${enabled ? "on" : "off"}; debug=${debug ? "on" : "off"}; ${authState}; model=${config.model}; cache=${cache.size}/${config.cacheMaxEntries}`,
+        [
+          `Jev router: ${enabled ? "on" : "off"}`,
+          `debug=${debug ? "on" : "off"}`,
+          authState,
+          `model=${config.model}`,
+          `thresholds: decomp>=${config.decompositionThreshold}, bounded>=${config.boundedVerificationThreshold}`,
+          `history=${config.historyTurns} turns`,
+          `cache=${cache.size}/${config.cacheMaxEntries}`,
+        ].join("; "),
         "info",
       );
     },
@@ -112,25 +122,19 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     }
 
     try {
-      let decision = cache.get(event.prompt);
-      const fromCache = decision !== undefined;
-      if (!decision) {
-        decision = await classifyWithJev(event.prompt, apiKey, config, ctx.signal);
-        cache.set(event.prompt, decision);
+      const history = recentHistory(ctx, config.historyTurns, event.prompt);
+      const cacheKey = JSON.stringify([event.prompt, history]);
+
+      let decision = cache.get(cacheKey);
+      if (decision) {
+        decision = { ...decision, cached: true };
+      } else {
+        decision = await classifyWithJev(event.prompt, apiKey, config, ctx.signal, history);
+        cache.set(cacheKey, decision);
       }
 
       if (debug) {
-        ctx.ui.notify(`Jev route: ${formatDecision(decision)}${fromCache ? " (cached)" : ""}`, "info");
-      }
-
-      if (decision.confidence < config.minConfidence) {
-        if (debug) {
-          ctx.ui.notify(
-            `Jev route ignored: confidence ${decision.confidence.toFixed(3)} < ${config.minConfidence.toFixed(3)}`,
-            "warning",
-          );
-        }
-        return;
+        ctx.ui.notify(`Jev route: ${formatDecision(decision)}`, "info");
       }
 
       const policy = policyFor(decision.mode);
@@ -154,7 +158,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
   });
 }
 
-export { classifyWithJev, parseClassificationResponse } from "./jev-client.js";
+export { classifyWithJev, parseClassificationResponse, parseNoulAnswer } from "./jev-client.js";
 export { policyFor } from "./policies.js";
 export { TtlCache } from "./cache.js";
 export type { ClassificationResult, ResponseMode, RouterConfig } from "./types.js";

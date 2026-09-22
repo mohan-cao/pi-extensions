@@ -8,6 +8,14 @@ Returning `systemPrompt` replaces the complete prompt for the run. Every time th
 
 The section is deleted at the start of every turn so a `normal` classification cannot inherit a stale policy from a previous turn.
 
+### Why two Noul questions instead of one Choice
+
+A single 3-way Choice makes `normal` a competing argmax candidate. A decomposition-shaped request where `normal` scored 0.40 and `decomposition_required` scored 0.35 was routed to `normal`. Two orthogonal Noul signals composed in code keep `normal` as the residual, and give decomposition explicit precedence. Asymmetric thresholds (a higher bar for bounded verification than for decomposition) match the asymmetry of the failure modes.
+
+### Why history is included
+
+`state` originally contained only `event.prompt`, so follow-ups such as "what about the second one?" were unclassifiable in isolation. `recentHistory()` adds a bounded slice of the current branch (default 4 turns, 2k chars per turn) so Jev input cost stays flat.
+
 ## Development
 
 This repository is a pnpm workspace (pnpm 10, `lockfileVersion: 9.0`). From the
@@ -51,4 +59,8 @@ To publish the scoped package:
 
 ## Future Langfuse loop
 
-The current classifier prompt is isolated in `src/prompt.ts`. That is the intended seam for a future Langfuse `getPrompt()` / iterative research process. Replace the static instructions/criteria provider without changing Pi auth, Jev transport, policy injection, or package installation.
+The classifier prompts are isolated in `src/prompt.ts`. That is the intended
+seam for a future Langfuse `getPrompt()` / iterative research process. Replace
+the static question specs without changing Pi auth, Jev transport, policy
+injection, or package installation. Thresholds should only be tuned against a
+labeled eval set, not by intuition.
