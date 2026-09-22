@@ -21,6 +21,15 @@ importers:
         specifier: 5.8.3
         version: 5.8.3
 
+  packages/pi-jev-response-router:
+    dependencies:
+      '@earendil-works/pi-ai':
+        specifier: '*'
+        version: 0.86.0(ws@8.21.3)
+      '@earendil-works/pi-coding-agent':
+        specifier: '*'
+        version: 0.86.0(ws@8.21.3)
+
 packages:
 
   '@anthropic-ai/sdk@0.124.0':

@@ -4,13 +4,18 @@ The classifier runs in Pi's `before_agent_start` hook after skill/template expan
 
 ## Development
 
-This repository is an npm workspace. From the repository root:
+This repository is a pnpm workspace (pnpm 10, `lockfileVersion: 9.0`). From the
+repository root:
 
 ```bash
-npm install
-npm run build
-npm test
+pnpm install --frozen-lockfile
+pnpm build      # pnpm -r build
+pnpm test       # pnpm -r test
 ```
+
+The publish workflow and local development both use pnpm for install/build/test;
+only the final `npm publish` uses npm, so that npm trusted publishing (OIDC)
+handles authentication and provenance.
 
 For a user-local Pi install directly from the working tree:
 
@@ -23,17 +28,20 @@ Pi installs local packages into user settings by default. Use `-l` only if you w
 To produce an npm tarball:
 
 ```bash
-npm run pack:router
+pnpm pack:router
 ```
 
 To publish the scoped package:
 
-2. `npm login`
-3. `npm run build && npm test`
-4. `npm run publish:router`
-5. Install it with `pi install npm:@your-scope/pi-jev-response-router`.
+1. `npm login`
+2. `pnpm build && pnpm test`
+3. `pnpm publish:router`
+4. Install it with `pi install npm:@your-scope/pi-jev-response-router`.
 
 > npm scoped package syntax is `@scope/package`, not `@scope:package`.
+>
+> Automated releases use GitHub Actions with npm trusted publishing; see
+> [`RELEASING.md`](./RELEASING.md).
 
 ## Future Langfuse loop
 

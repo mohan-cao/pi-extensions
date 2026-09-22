@@ -28,10 +28,10 @@ jobs:
       - uses: actions/checkout@v6
 
       # pnpm/action-setup is the correct action for pnpm v10 and older
-      # (pnpm/setup is only for v11+).
+      # (pnpm/setup is only for v11+). Version matches packageManager.
       - uses: pnpm/action-setup@v6
         with:
-          version: "10"
+          version: "10.18.0"
 
       - uses: actions/setup-node@v6
         with:
@@ -50,10 +50,8 @@ jobs:
             exit 1
           fi
 
-      # npm workspaces are declared in package.json, so these root scripts run
-      # the package build/test regardless of how dependencies were installed.
-      - run: npm run build
-      - run: npm test
+      - run: pnpm -r build
+      - run: pnpm -r test
 
       # npm (not pnpm) performs the publish so trusted publishing/OIDC works.
       # `prepack` rebuilds the package; provenance is generated automatically.
