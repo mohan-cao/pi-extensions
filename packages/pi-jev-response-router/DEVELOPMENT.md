@@ -1,6 +1,12 @@
 ## Why `before_agent_start` instead of rewriting user input?
 
-The classifier runs in Pi's `before_agent_start` hook after skill/template expansion. The selected policy is appended to the **system prompt for that run**, while the original user message remains untouched. This avoids making the policy part of user content and works cleanly with normal Pi session history.
+The classifier runs in Pi's `before_agent_start` hook after skill/template expansion. The selected policy is injected as a named **system-prompt section** (`event.systemPromptOptions.sections["jev-response-policy"]`), while the original user message remains untouched. This avoids making the policy part of user content and works cleanly with normal Pi session history.
+
+### Why sections, not `return { systemPrompt }`
+
+Returning `systemPrompt` replaces the complete prompt for the run. Every time the selected mode changed, the entire provider prompt (including tool declarations) was invalidated, producing a full prompt-cache miss on every turn. Mutating `sections` lets Pi diff and append a minimal patch, preserving the cached prefix. This was the main cause of runaway token cost.
+
+The section is deleted at the start of every turn so a `normal` classification cannot inherit a stale policy from a previous turn.
 
 ## Development
 

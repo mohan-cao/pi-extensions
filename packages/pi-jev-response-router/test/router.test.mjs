@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { TtlCache } from "../dist/cache.js";
 import { parseClassificationResponse } from "../dist/jev-client.js";
 import { policyFor } from "../dist/policies.js";
 
@@ -86,6 +87,8 @@ test("classifyWithJev sends native System One shape", async () => {
         timeoutMs: 1000,
         retries: 0,
         minConfidence: 0,
+        cacheTtlMs: 0,
+        cacheMaxEntries: 0,
       },
     );
 
@@ -105,4 +108,18 @@ test("classifyWithJev sends native System One shape", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("TtlCache expires, evicts, and can be disabled", () => {
+  const cache = new TtlCache(50, 2);
+  cache.set("a", 1);
+  cache.set("b", 2);
+  assert.equal(cache.get("a"), 1);
+  cache.set("c", 3);
+  assert.equal(cache.size, 2);
+  assert.equal(cache.get("b"), undefined);
+
+  const disabled = new TtlCache(1000, 0);
+  disabled.set("a", 1);
+  assert.equal(disabled.get("a"), undefined);
 });

@@ -19,6 +19,9 @@ export interface RouterConfig {
   timeoutMs: number;
   retries: number;
   minConfidence: number;
+  /** Classification cache TTL in ms. 0 disables caching. */
+  cacheTtlMs: number;
+  cacheMaxEntries: number;
 }
 
 export interface JevChoiceAnswer {

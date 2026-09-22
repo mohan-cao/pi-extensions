@@ -1,7 +1,12 @@
 import type { ResponseMode } from "./types.js";
 
+/**
+ * Policy bodies are injected as a named system-prompt section (see
+ * `POLICY_SECTION` in index.ts), so Pi wraps them in a
+ * `<jev-response-policy>` tag. Do not re-add the wrapper here.
+ */
+
 const BOUNDED_VERIFICATION_POLICY = `
-<jev-response-policy mode="bounded-verification">
 The current user request was classified as a bounded verification task.
 Evaluate no more than three independently evaluable claims/questions.
 
@@ -14,11 +19,9 @@ Do not manufacture an "it depends" discussion when qualifications do not
 materially change the truth value. If an unexpected dependency genuinely makes
 a direct verdict misleading, state that dependency precisely rather than
 hedging vaguely.
-</jev-response-policy>
 `.trim();
 
 const DECOMPOSITION_POLICY = `
-<jev-response-policy mode="decomposition-required">
 The current user request was classified as requiring decomposition before a
 reliable conclusion.
 
@@ -29,7 +32,6 @@ synthesize the result.
 
 Avoid vague "it depends" hedging: name the dependencies explicitly and explain
 how changing them changes the conclusion.
-</jev-response-policy>
 `.trim();
 
 export function policyFor(mode: ResponseMode): string | undefined {
