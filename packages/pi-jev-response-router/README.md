@@ -1,6 +1,7 @@
 # @mohan-cao/pi-jev-response-router
 
-pi extension that calls Jev before each agent run and selects a response policy.
+pi extension that calls Jev before each agent run, selects a response policy, and
+verifies the final answer.
 
 - `bounded_verification` — at most three concrete claims/questions; answer with
   correct / partially correct / incorrect plus concise corrections.
@@ -24,8 +25,22 @@ The mode is then composed in code with **decomposition taking precedence**, and
 `normal` as the residual. This is what keeps decomposition-shaped requests from
 being misrouted as normal.
 
-A bounded slice of recent conversation is included in Jev's `state`, so follow-up
-requests are classifiable in context.
+The selected policy is injected as a named **system-prompt section**
+(`jev-response-policy`), so Pi emits a minimal prompt patch and the provider
+cache prefix survives. (Returning `systemPrompt` would replace the whole prompt
+on every mode change, i.e. a full cache miss.)
+
+### Verification (signal only)
+
+After a run settles, the final answer is sent back to Jev for three Noul
+judgments: does it answer the request, is it vague/hedged, and is the problem
+genuinely tricky. The result is surfaced as a footer status:
+
+- `💡 possible vagueness` — evasive or unresponsive answer
+- `💡 genuinely tricky` — the problem probably needed decomposition
+
+This is **verify-only**: it never retries or rewrites the answer. Retry is
+deliberately out of scope for now.
 
 ### Install from npm
 
@@ -45,6 +60,8 @@ You can also provide `TYPESAFE_API_KEY` in the environment. An explicitly stored
 /jev-router status
 /jev-router on
 /jev-router off
+/jev-router verify on
+/jev-router verify off
 /jev-router debug on
 /jev-router debug off
 /jev-router clear-cache
@@ -53,17 +70,6 @@ You can also provide `TYPESAFE_API_KEY` in the environment. An explicitly stored
 
 `/jev-router classify ...` lets you demo the Jev route without invoking the main
 model.
-
-### Performance
-
-The selected policy is injected as a named **system-prompt section**
-(`jev-response-policy`), so Pi emits a minimal prompt patch and the provider
-cache prefix survives. Previously the extension returned a whole replacement
-`systemPrompt`, which invalidated the entire prompt (including tool
-declarations) on every mode change, producing a full prompt-cache miss.
-
-Classifications are also cached (TTL + LRU) so a repeated prompt does not pay
-another Jev round trip.
 
 ### Configuration
 
@@ -81,6 +87,10 @@ All configuration is optional:
 | `PI_JEV_ROUTER_HISTORY_TURNS` | `4` | Prior turns included in Jev state (0 disables) |
 | `PI_JEV_ROUTER_CACHE_TTL_MS` | `300000` | Classification cache TTL (0 disables) |
 | `PI_JEV_ROUTER_CACHE_MAX` | `64` | Classification cache entry cap |
+| `PI_JEV_ROUTER_VERIFY` | `true` | Post-generation verification on by default |
+| `PI_JEV_ROUTER_VERIFY_EVASIVE_THRESHOLD` | `0.6` | P(evasive) at or above which to flag vagueness |
+| `PI_JEV_ROUTER_VERIFY_ANSWERS_THRESHOLD` | `0.35` | P(answers the request) at or below which to flag vagueness |
+| `PI_JEV_ROUTER_VERIFY_TRICKY_THRESHOLD` | `0.6` | P(genuinely tricky) at or above which to flag |
 
 `PI_JEV_ROUTER_MIN_CONFIDENCE` is deprecated. In `0.1.x` it was effectively a
 no-op (confidence is in `[0, 1]` and the default was `0`). It now serves as a

@@ -2,14 +2,16 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 
 import { TtlCache } from "./cache.js";
 import { loadConfig } from "./config.js";
-import { recentHistory } from "./context.js";
+import { lastExchange, recentHistory } from "./context.js";
 import { classifyWithJev } from "./jev-client.js";
 import { policyFor } from "./policies.js";
 import { JEV_PROVIDER_ID, registerJevAuthProvider } from "./provider.js";
 import type { ClassificationResult } from "./types.js";
+import { formatVerifyStatus, verifyResponse } from "./verify.js";
 
 /** System-prompt section key. Pi wraps the value in a tag of the same name. */
 const POLICY_SECTION = "jev-response-policy";
+const VERIFY_STATUS_KEY = "jev-verify";
 
 function formatDecision(result: ClassificationResult): string {
   const { decomposition, boundedVerification } = result.signals;
@@ -24,6 +26,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
   const cache = new TtlCache<ClassificationResult>(config.cacheTtlMs, config.cacheMaxEntries);
   let enabled = true;
   let debug = false;
+  let verifyEnabled = config.verify;
 
   async function resolveApiKey(ctx: ExtensionContext) {
     const auth = await ctx.modelRegistry.getProviderAuth(JEV_PROVIDER_ID);
@@ -32,7 +35,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
 
   pi.registerCommand("jev-router", {
     description:
-      "Control/test the Jev response router: status | on | off | debug on|off | clear-cache | classify <text>",
+      "Control/test the Jev response router: status | on | off | debug on|off | verify on|off | clear-cache | classify <text>",
     handler: async (rawArgs, ctx) => {
       const args = rawArgs.trim();
 
@@ -43,6 +46,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       }
       if (args === "off") {
         enabled = false;
+        ctx.ui.setStatus(VERIFY_STATUS_KEY, undefined);
         ctx.ui.notify("Jev response router disabled", "info");
         return;
       }
@@ -54,6 +58,17 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       if (args === "debug off") {
         debug = false;
         ctx.ui.notify("Jev response router debug notifications disabled", "info");
+        return;
+      }
+      if (args === "verify on") {
+        verifyEnabled = true;
+        ctx.ui.notify("Jev post-generation verification enabled", "info");
+        return;
+      }
+      if (args === "verify off") {
+        verifyEnabled = false;
+        ctx.ui.setStatus(VERIFY_STATUS_KEY, undefined);
+        ctx.ui.notify("Jev post-generation verification disabled", "info");
         return;
       }
       if (args === "clear-cache") {
@@ -91,6 +106,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       ctx.ui.notify(
         [
           `Jev router: ${enabled ? "on" : "off"}`,
+          `verify=${verifyEnabled ? "on" : "off"}`,
           `debug=${debug ? "on" : "off"}`,
           authState,
           `model=${config.model}`,
@@ -104,8 +120,9 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
   });
 
   pi.on("before_agent_start", async (event, ctx) => {
-    // Clear the previous turn's steering so a `normal` classification cannot
-    // inherit a stale policy.
+    // Clear the previous turn's indicator and steering so a `normal`
+    // classification cannot inherit stale state.
+    if (ctx.hasUI) ctx.ui.setStatus(VERIFY_STATUS_KEY, undefined);
     delete event.systemPromptOptions.sections[POLICY_SECTION];
 
     if (!enabled || !event.prompt.trim()) return;
@@ -156,9 +173,51 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       return;
     }
   });
+
+  pi.on("agent_settled", async (_event, ctx) => {
+    if (!enabled || !verifyEnabled) return;
+    // The only product of verification is a status indicator, so skip the Jev
+    // call entirely when there is nowhere to render it (e.g. -p / json mode).
+    if (!ctx.hasUI) return;
+
+    const apiKey = await resolveApiKey(ctx);
+    if (!apiKey) return;
+
+    const exchange = lastExchange(ctx);
+    if (!exchange) return;
+
+    try {
+      const result = await verifyResponse(
+        exchange.request,
+        exchange.response,
+        apiKey,
+        config,
+        ctx.signal,
+      );
+
+      ctx.ui.setStatus(VERIFY_STATUS_KEY, formatVerifyStatus(result));
+
+      if (debug) {
+        ctx.ui.notify(
+          `Jev verify: ${result.flag} (answers=${result.answersQuestion.toFixed(2)}, evasive=${result.evasive.toFixed(2)}, tricky=${result.tricky.toFixed(2)})`,
+          "info",
+        );
+      }
+    } catch (error) {
+      // Verification is advisory; never let it affect the run.
+      if (debug) {
+        ctx.ui.notify(
+          `Jev verify failed open: ${error instanceof Error ? error.message : String(error)}`,
+          "warning",
+        );
+      }
+    }
+  });
 }
 
 export { classifyWithJev, parseClassificationResponse, parseNoulAnswer } from "./jev-client.js";
 export { policyFor } from "./policies.js";
+export { verifyResponse, formatVerifyStatus } from "./verify.js";
 export { TtlCache } from "./cache.js";
 export type { ClassificationResult, ResponseMode, RouterConfig } from "./types.js";
+export type { VerifyResult, VerifyFlag } from "./verify.js";

@@ -7,6 +7,12 @@ function numberFromEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function boolFromEnv(name: string, fallback: boolean): boolean {
+  const value = process.env[name];
+  if (value === undefined || value.trim() === "") return fallback;
+  return !["0", "false", "off", "no"].includes(value.trim().toLowerCase());
+}
+
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
@@ -33,5 +39,9 @@ export function loadConfig(): RouterConfig {
     historyTurns: Math.max(0, Math.floor(numberFromEnv("PI_JEV_ROUTER_HISTORY_TURNS", 4))),
     cacheTtlMs: Math.max(0, numberFromEnv("PI_JEV_ROUTER_CACHE_TTL_MS", 300_000)),
     cacheMaxEntries: Math.max(0, Math.floor(numberFromEnv("PI_JEV_ROUTER_CACHE_MAX", 64))),
+    verify: boolFromEnv("PI_JEV_ROUTER_VERIFY", true),
+    verifyEvasiveThreshold: clamp01(numberFromEnv("PI_JEV_ROUTER_VERIFY_EVASIVE_THRESHOLD", 0.6)),
+    verifyAnswersThreshold: clamp01(numberFromEnv("PI_JEV_ROUTER_VERIFY_ANSWERS_THRESHOLD", 0.35)),
+    verifyTrickyThreshold: clamp01(numberFromEnv("PI_JEV_ROUTER_VERIFY_TRICKY_THRESHOLD", 0.6)),
   };
 }

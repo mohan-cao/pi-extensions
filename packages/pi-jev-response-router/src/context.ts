@@ -73,3 +73,42 @@ export function buildState(prompt: string, history: HistoryTurn[]): unknown {
     user_request: prompt,
   };
 }
+
+export interface Exchange {
+  request: string;
+  response: string;
+}
+
+/** Last assistant answer and the user request that prompted it. */
+export function lastExchange(ctx: ExtensionContext): Exchange | undefined {
+  const branch = ctx.sessionManager.getBranch();
+  let response: string | undefined;
+  let request = "";
+
+  for (let i = branch.length - 1; i >= 0; i -= 1) {
+    const entry = branch[i];
+    if (!entry || entry.type !== "message") continue;
+
+    const message = entry.message;
+    if (message.role === "assistant" && response === undefined) {
+      // A partial or failed answer is not a real candidate for verification.
+      if (message.stopReason === "aborted" || message.stopReason === "error") {
+        return undefined;
+      }
+      const text = messageText(message.content).trim();
+      if (text) response = text;
+      continue;
+    }
+
+    if (message.role === "user" && response !== undefined) {
+      const text = messageText(message.content).trim();
+      if (text) {
+        request = text;
+        break;
+      }
+    }
+  }
+
+  if (response === undefined) return undefined;
+  return { request, response: clamp(response) };
+}
