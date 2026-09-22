@@ -1,14 +1,19 @@
-import { RESPONSE_MODE_CRITERIA, RESPONSE_MODE_INSTRUCTIONS } from "./prompt.js";
+import { buildState, type HistoryTurn } from "./context.js";
 import {
-  RESPONSE_MODES,
+  BOUNDED_VERIFICATION_QUESTION,
+  DECOMPOSITION_QUESTION,
+  type NoulQuestionSpec,
+} from "./prompt.js";
+import {
   type ClassificationResult,
-  type JevChoiceAnswer,
+  type JevNoulAnswer,
   type JevSystemOneResponse,
   type ResponseMode,
   type RouterConfig,
 } from "./types.js";
 
-const QUESTION_ID = "response_mode";
+const DECOMPOSITION_ID = "requires_decomposition";
+const BOUNDED_ID = "bounded_verification";
 
 export class JevError extends Error {
   constructor(
@@ -18,66 +23,6 @@ export class JevError extends Error {
     super(message);
     this.name = "JevError";
   }
-}
-
-function isResponseMode(value: string): value is ResponseMode {
-  return (RESPONSE_MODES as readonly string[]).includes(value);
-}
-
-function normalizeProbabilities(
-  probabilities: Record<string, number>,
-): Record<ResponseMode, number> {
-  return {
-    bounded_verification: probabilities.bounded_verification ?? 0,
-    decomposition_required: probabilities.decomposition_required ?? 0,
-    normal: probabilities.normal ?? 0,
-  };
-}
-
-export function parseClassificationResponse(
-  payload: JevSystemOneResponse,
-): ClassificationResult {
-  const raw = payload.answers?.[QUESTION_ID];
-  if (!raw || typeof raw !== "object") {
-    throw new JevError(`Jev response is missing answers.${QUESTION_ID}`);
-  }
-
-  const answer = raw as Partial<JevChoiceAnswer>;
-  if (answer.type !== "choice") {
-    throw new JevError(`Expected a choice answer for ${QUESTION_ID}`);
-  }
-  if (typeof answer.choice !== "string" || !isResponseMode(answer.choice)) {
-    throw new JevError(`Unexpected Jev response mode: ${String(answer.choice)}`);
-  }
-  if (typeof answer.confidence !== "number" || !Number.isFinite(answer.confidence)) {
-    throw new JevError("Jev choice answer is missing a numeric confidence");
-  }
-  if (!answer.probabilities || typeof answer.probabilities !== "object") {
-    throw new JevError("Jev choice answer is missing probabilities");
-  }
-
-  return {
-    mode: answer.choice,
-    confidence: answer.confidence,
-    probabilities: normalizeProbabilities(answer.probabilities),
-    ...(payload.model ? { model: payload.model } : {}),
-  };
-}
-
-function buildRequest(prompt: string, model: string) {
-  return {
-    model,
-    state: {
-      user_request: prompt,
-    },
-    questions: {
-      [QUESTION_ID]: {
-        type: "choice",
-        instructions: RESPONSE_MODE_INSTRUCTIONS,
-        criteria: RESPONSE_MODE_CRITERIA,
-      },
-    },
-  };
 }
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
@@ -124,13 +69,18 @@ function makeSignal(parent: AbortSignal | undefined, timeoutMs: number) {
   };
 }
 
-export async function classifyWithJev(
-  prompt: string,
+/**
+ * Single transport for POST /v1/systemone. Answers are keyed by the question
+ * names supplied in `questions`.
+ */
+export async function callSystemOne(
+  state: unknown,
+  questions: Record<string, unknown>,
   apiKey: string,
   config: RouterConfig,
   parentSignal?: AbortSignal,
-): Promise<ClassificationResult> {
-  const requestBody = JSON.stringify(buildRequest(prompt, config.model));
+): Promise<JevSystemOneResponse> {
+  const requestBody = JSON.stringify({ model: config.model, state, questions });
 
   for (let attempt = 0; attempt <= config.retries; attempt += 1) {
     const scopedSignal = makeSignal(parentSignal, config.timeoutMs);
@@ -151,9 +101,7 @@ export async function classifyWithJev(
     }
 
     if (response.ok) {
-      return parseClassificationResponse(
-        (await response.json()) as JevSystemOneResponse,
-      );
+      return (await response.json()) as JevSystemOneResponse;
     }
 
     const retryable = response.status === 429 || response.status === 529;
@@ -170,4 +118,89 @@ export async function classifyWithJev(
   }
 
   throw new JevError("Jev request failed after retries");
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+export function parseNoulAnswer(payload: JevSystemOneResponse, id: string): number {
+  const raw = payload.answers?.[id];
+  if (!raw || typeof raw !== "object") {
+    throw new JevError(`Jev response is missing answers.${id}`);
+  }
+
+  const answer = raw as Partial<JevNoulAnswer> & { type?: unknown };
+  if (answer.type !== "noul") {
+    throw new JevError(`Expected a noul answer for ${id}, got ${String(answer.type)}`);
+  }
+  if (typeof answer.noul !== "number" || !Number.isFinite(answer.noul)) {
+    throw new JevError(`Jev noul answer ${id} is missing a numeric value`);
+  }
+  return clamp01(answer.noul);
+}
+
+/** Decomposition takes precedence; `normal` is the residual, never a competitor. */
+export function composeMode(
+  signals: ClassificationResult["signals"],
+  config: Pick<RouterConfig, "decompositionThreshold" | "boundedVerificationThreshold">,
+): ResponseMode {
+  if (signals.decomposition >= config.decompositionThreshold) return "decomposition_required";
+  if (signals.boundedVerification >= config.boundedVerificationThreshold) {
+    return "bounded_verification";
+  }
+  return "normal";
+}
+
+export function parseClassificationResponse(
+  payload: JevSystemOneResponse,
+  config: Pick<RouterConfig, "decompositionThreshold" | "boundedVerificationThreshold">,
+): ClassificationResult {
+  const signals = {
+    decomposition: parseNoulAnswer(payload, DECOMPOSITION_ID),
+    boundedVerification: parseNoulAnswer(payload, BOUNDED_ID),
+  };
+
+  const mode = composeMode(signals, config);
+  const probabilities: Record<ResponseMode, number> = {
+    bounded_verification: signals.boundedVerification,
+    decomposition_required: signals.decomposition,
+    normal: clamp01(1 - Math.max(signals.decomposition, signals.boundedVerification)),
+  };
+
+  const confidence =
+    mode === "decomposition_required"
+      ? signals.decomposition
+      : mode === "bounded_verification"
+        ? signals.boundedVerification
+        : probabilities.normal;
+
+  return {
+    mode,
+    confidence,
+    probabilities,
+    signals,
+    ...(payload.model ? { model: payload.model } : {}),
+  };
+}
+
+export async function classifyWithJev(
+  prompt: string,
+  apiKey: string,
+  config: RouterConfig,
+  parentSignal?: AbortSignal,
+  history: HistoryTurn[] = [],
+): Promise<ClassificationResult> {
+  const payload = await callSystemOne(
+    buildState(prompt, history),
+    {
+      [DECOMPOSITION_ID]: DECOMPOSITION_QUESTION satisfies NoulQuestionSpec,
+      [BOUNDED_ID]: BOUNDED_VERIFICATION_QUESTION satisfies NoulQuestionSpec,
+    },
+    apiKey,
+    config,
+    parentSignal,
+  );
+
+  return parseClassificationResponse(payload, config);
 }
