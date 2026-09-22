@@ -1,0 +1,60 @@
+name: Publish to npm
+
+# Publishes @mohan-cao/pi-jev-response-router when a v* tag is pushed.
+#
+# Auth: npm trusted publishing (OIDC). No NPM_TOKEN secret is required.
+# One-time npm setup (see RELEASING.md):
+#   npmjs.com -> package -> Settings -> Trusted publishing -> GitHub Actions
+#     Organization/user: mohan-cao
+#     Repository:        pi-extensions
+#     Workflow filename: publish.yml
+#     Allowed actions:   npm publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  # Required for npm trusted publishing: lets GitHub mint the OIDC token that
+  # npm exchanges for a short-lived, workflow-scoped publish credential.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # pnpm/action-setup is the correct action for pnpm v10 and older
+      # (pnpm/setup is only for v11+).
+      - uses: pnpm/action-setup@v6
+        with:
+          version: "10"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      # The tracked pnpm-lock.yaml is the only lockfile in the repo.
+      - run: pnpm install --frozen-lockfile
+
+      - name: Verify tag matches package version
+        run: |
+          pkg_version="$(node -p "require('./packages/pi-jev-response-router/package.json').version")"
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$pkg_version" != "$tag_version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match package version $pkg_version"
+            exit 1
+          fi
+
+      # npm workspaces are declared in package.json, so these root scripts run
+      # the package build/test regardless of how dependencies were installed.
+      - run: npm run build
+      - run: npm test
+
+      # npm (not pnpm) performs the publish so trusted publishing/OIDC works.
+      # `prepack` rebuilds the package; provenance is generated automatically.
+      - run: npm publish ./packages/pi-jev-response-router --access public
