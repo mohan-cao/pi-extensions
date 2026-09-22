@@ -38,6 +38,11 @@ export interface RouterConfig {
   /** Classification cache TTL in ms. 0 disables caching. */
   cacheTtlMs: number;
   cacheMaxEntries: number;
+  /** Whether post-generation verification runs by default. */
+  verify: boolean;
+  verifyEvasiveThreshold: number;
+  verifyAnswersThreshold: number;
+  verifyTrickyThreshold: number;
 }
 
 export interface JevNoulAnswer {

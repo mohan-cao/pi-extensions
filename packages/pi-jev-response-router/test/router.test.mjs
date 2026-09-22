@@ -10,6 +10,7 @@ import {
   parseNoulAnswer,
 } from "../dist/jev-client.js";
 import { policyFor } from "../dist/policies.js";
+import { formatVerifyStatus } from "../dist/verify.js";
 
 const thresholds = {
   decompositionThreshold: 0.5,
@@ -119,6 +120,10 @@ test("classifyWithJev sends two noul questions and bounded history", async () =>
         historyTurns: 4,
         cacheTtlMs: 0,
         cacheMaxEntries: 0,
+        verify: false,
+        verifyEvasiveThreshold: 0.6,
+        verifyAnswersThreshold: 0.35,
+        verifyTrickyThreshold: 0.6,
       },
       undefined,
       [{ role: "user", text: "tell me about UDP" }],
@@ -152,4 +157,11 @@ test("TtlCache expires, evicts, and can be disabled", () => {
   const disabled = new TtlCache(1000, 0);
   disabled.set("a", 1);
   assert.equal(disabled.get("a"), undefined);
+});
+
+test("formatVerifyStatus only flags vague or tricky", () => {
+  const base = { answersQuestion: 0.9, evasive: 0.1, tricky: 0.1 };
+  assert.equal(formatVerifyStatus({ ...base, flag: "ok" }), undefined);
+  assert.match(formatVerifyStatus({ ...base, flag: "vague" }), /vagueness/);
+  assert.match(formatVerifyStatus({ ...base, flag: "tricky" }), /tricky/);
 });

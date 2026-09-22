@@ -37,3 +37,34 @@ export const BOUNDED_VERIFICATION_QUESTION: NoulQuestionSpec = {
       "The request is open-ended, asks for design, planning, recommendation, or tradeoff analysis, or contains more than three checkable claims.",
   },
 };
+
+export const VERIFY_ANSWER_QUESTION: NoulQuestionSpec = {
+  type: "noul",
+  instructions: "Does the response directly and substantively answer the user's request?",
+  criteria: {
+    true: "The response addresses the actual question asked and gives the user something actionable or conclusive.",
+    false:
+      "The response deflects, answers a different question, or leaves the user's request unaddressed.",
+  },
+};
+
+export const VERIFY_EVASIVE_QUESTION: NoulQuestionSpec = {
+  type: "noul",
+  instructions:
+    "Is the response vague, hedged, or non-committal in a way that avoids taking a position the request calls for?",
+  criteria: {
+    true: "The response leans on generic caveats, an 'it depends' frame, or filler instead of committing where a position was warranted.",
+    false:
+      "The response commits to a position, or clearly states what it does not know and why, without hiding behind vague hedging.",
+  },
+};
+
+export const VERIFY_TRICKY_QUESTION: NoulQuestionSpec = {
+  type: "noul",
+  instructions:
+    "Does this problem genuinely require decomposition, such as material assumptions, tradeoffs, or interacting constraints, such that a single direct answer would be misleading?",
+  criteria: {
+    true: "The problem space is genuinely conditional or multi-dimensional; a direct verdict would oversimplify it.",
+    false: "A direct answer is appropriate and no significant decomposition is needed.",
+  },
+};
