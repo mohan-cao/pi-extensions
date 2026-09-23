@@ -45,6 +45,18 @@ export const BOUNDED_VERIFICATION_QUESTION: NoulQuestionSpec = {
   },
 };
 
+export const PREMISE_DEFECT_QUESTION: ScoreQuestionSpec = {
+  type: "score",
+  instructions:
+    "How sound is the factual premise of this request? Rate whether the request presupposes something that is false, or true only under a narrower framing than the request implies.",
+  criteria: [
+    "Premise is sound. Nothing presupposed is false or misleading.",
+    "Minor slip in wording or intent; imprecise but not misleading.",
+    "The presupposition holds only under a narrower framing than the request implies; worth naming, but the request is still answerable as posed.",
+    "The presupposition is false or materially misleading; answering as posed would reinforce a misconception.",
+  ],
+};
+
 export const VERIFY_ANSWER_QUESTION: NoulQuestionSpec = {
   type: "noul",
   instructions:

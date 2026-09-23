@@ -40,6 +40,7 @@ export function loadConfig(): RouterConfig {
     boundedVerificationThreshold: clamp01(
       numberFromEnv("PI_JEV_ROUTER_BOUNDED_THRESHOLD", legacyMinConfidence || 0.6),
     ),
+    premiseDefectThreshold: clamp(numberFromEnv("PI_JEV_ROUTER_PREMISE_THRESHOLD", 2.8), 0, 3),
     historyTurns: Math.max(0, Math.floor(numberFromEnv("PI_JEV_ROUTER_HISTORY_TURNS", 4))),
     cacheTtlMs: Math.max(0, numberFromEnv("PI_JEV_ROUTER_CACHE_TTL_MS", 300_000)),
     cacheMaxEntries: Math.max(0, Math.floor(numberFromEnv("PI_JEV_ROUTER_CACHE_MAX", 64))),

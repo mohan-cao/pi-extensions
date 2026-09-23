@@ -15,6 +15,8 @@ export interface ClassificationSignals {
   decomposition: number;
   /** P(the request is bounded verification). */
   boundedVerification: number;
+  /** Expected severity of a false or misleading premise, 0-3. */
+  premiseDefect: number;
 }
 
 export interface ClassificationResult {
@@ -36,6 +38,8 @@ export interface RouterConfig {
   decompositionThreshold: number;
   /** P(bounded verification) at or above which bounded verification wins. */
   boundedVerificationThreshold: number;
+  /** Expected premise defect (0-3) at or above which the premise is corrected. */
+  premiseDefectThreshold: number;
   /** Number of prior conversation turns included in Jev state. 0 disables. */
   historyTurns: number;
   /** Classification cache TTL in ms. 0 disables caching. */

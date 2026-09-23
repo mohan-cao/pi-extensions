@@ -16,20 +16,27 @@ import {
   parseNoulAnswer,
   parseScoreAnswer,
 } from "../dist/jev-client.js";
-import { policyFor } from "../dist/policies.js";
+import { policyFor, premisePolicyFor } from "../dist/policies.js";
 import { formatVerifyStatus } from "../dist/verify.js";
 
 const thresholds = {
-  decompositionThreshold: 0.5,
+  decompositionThreshold: 0.6,
   boundedVerificationThreshold: 0.6,
 };
 
-function noulResponse(decomposition, boundedVerification, model = "jev-1.13.0") {
+function noulResponse(decomposition, boundedVerification, premiseDefect = 0, model = "jev-1.13.0") {
   return {
     model,
     answers: {
       requires_decomposition: { type: "noul", noul: decomposition },
       bounded_verification: { type: "noul", noul: boundedVerification },
+      premise_defect: {
+        type: "score",
+        score: premiseDefect,
+        confidence: 0.9,
+        legend: { 0: "sound", 1: "slip", 2: "narrow", 3: "misleading" },
+        probabilities: { 0: 0.1, 1: 0.1, 2: 0.1, 3: 0.7 },
+      },
     },
   };
 }
@@ -51,12 +58,13 @@ test("composeMode selects bounded verification when only that clears", () => {
 });
 
 test("parseClassificationResponse composes signals into a result", () => {
-  const result = parseClassificationResponse(noulResponse(0.82, 0.11), thresholds);
+  const result = parseClassificationResponse(noulResponse(0.82, 0.11, 2.4), thresholds);
 
   assert.equal(result.mode, "decomposition_required");
   assert.equal(result.confidence, 0.82);
   assert.equal(result.signals.decomposition, 0.82);
   assert.equal(result.signals.boundedVerification, 0.11);
+  assert.equal(result.signals.premiseDefect, 2.4);
   assert.equal(result.probabilities.decomposition_required, 0.82);
   assert.equal(result.model, "jev-1.13.0");
 });
@@ -94,6 +102,14 @@ test("specialized modes produce policies and normal does not", () => {
   assert.equal(policyFor("normal"), undefined);
 });
 
+test("premise correction applies above threshold and never for bounded verification", () => {
+  assert.equal(premisePolicyFor("normal", 1.0, 2.8), undefined);
+  assert.match(premisePolicyFor("normal", 3.0, 2.8), /state the correction/);
+  assert.match(premisePolicyFor("decomposition_required", 3.0, 2.8), /state the correction/);
+  // Bounded verification already emits a verdict and corrections.
+  assert.equal(premisePolicyFor("bounded_verification", 3.0, 2.8), undefined);
+});
+
 test("buildState includes bounded history only when present", () => {
   assert.deepEqual(buildState("hi", []), { user_request: "hi" });
   assert.deepEqual(buildState("hi", [{ role: "assistant", text: "hello" }]), {
@@ -102,7 +118,7 @@ test("buildState includes bounded history only when present", () => {
   });
 });
 
-test("classifyWithJev sends two noul questions and bounded history", async () => {
+test("classifyWithJev sends both nouls, the premise score, and bounded history", async () => {
   const originalFetch = globalThis.fetch;
   let seen;
 
@@ -137,6 +153,7 @@ test("classifyWithJev sends two noul questions and bounded history", async () =>
     );
 
     assert.equal(result.mode, "bounded_verification");
+    assert.equal(result.signals.premiseDefect, 0);
     assert.equal(seen.url, "https://api.typesafe.ai/v1/systemone");
     assert.equal(seen.init.method, "POST");
     assert.equal(seen.init.headers.Authorization, "Bearer test-key");
@@ -145,6 +162,7 @@ test("classifyWithJev sends two noul questions and bounded history", async () =>
     assert.equal(body.model, "jev-latest");
     assert.equal(body.questions.requires_decomposition.type, "noul");
     assert.equal(body.questions.bounded_verification.type, "noul");
+    assert.equal(body.questions.premise_defect.type, "score");
     assert.deepEqual(body.state.recent_conversation, ["user: tell me about UDP"]);
     assert.equal(body.state.user_request, "UDP preserves datagram boundaries, right?");
   } finally {
