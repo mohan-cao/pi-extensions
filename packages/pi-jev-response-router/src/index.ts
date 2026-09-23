@@ -2,6 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 
 import {
   FOOTER_MODES,
+  PHASES,
   TtlCache,
   classifyWithJev,
   formatCoaching,
@@ -14,6 +15,8 @@ import {
   verifyResponse,
   type ClassificationResult,
   type FooterMode,
+  type PhaseJudgment,
+  type PhaseRecommendation,
 } from "@mohan-cao/jev-classifier";
 
 import { loadConfig, loadPhaseConfig } from "./config.js";
@@ -49,6 +52,10 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
   let verifyEnabled = stored.verify ?? config.verify;
   let phaseEnabled = stored.phase ?? true;
   let footer: FooterMode = stored.footer ?? "compact";
+
+  // Kept for the status readout, so "why is nothing showing?" is answerable.
+  let lastJudgment: PhaseJudgment | undefined;
+  let lastRecommendation: PhaseRecommendation | undefined;
 
   function persist(): boolean {
     return savePreferences({ enabled, debug, verify: verifyEnabled, phase: phaseEnabled, footer });
@@ -125,11 +132,20 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     ctx.ui.notify("Jev classification cache cleared", "info");
   }
 
+  function describeLastJudgment(): string {
+    if (!lastJudgment) return "none yet";
+    const { phase, phaseConfidence, implementationReady, trajectory, trajectoryConfidence } =
+      lastJudgment;
+    const nudge = lastRecommendation ? "" : " (no nudge)";
+    return `${phase}@${phaseConfidence.toFixed(2)} ready=${implementationReady.toFixed(2)} ${trajectory}@${trajectoryConfidence.toFixed(2)}${nudge}`;
+  }
+
   async function reportStatus(ctx: ExtensionContext): Promise<void> {
     const auth = await ctx.modelRegistry.getProviderAuth(JEV_PROVIDER_ID);
     const authState = auth?.auth.apiKey
       ? `authenticated (${auth.source ?? "configured"})`
       : "not authenticated";
+    const routes = PHASES.filter((phase) => phaseConfig.routes[phase]);
     ctx.ui.notify(
       [
         `Jev router: ${enabled ? "on" : "off"}`,
@@ -143,6 +159,9 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         `history=${config.historyTurns} turns`,
         `cache=${cache.size}/${config.cacheMaxEntries}`,
         `prefs=${preferencesPath()}`,
+        `phaseRoutes=${routes.length > 0 ? routes.join(",") : "none (set PI_JEV_PHASE_*_MODEL)"}`,
+        `currentModel=${ctx.model?.id ?? "unknown"}`,
+        `lastPhase=${describeLastJudgment()}`,
       ].join("; "),
       "info",
     );
@@ -208,6 +227,8 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     try {
       const judgment = await judgePhase(turns, apiKey, config, ctx.signal);
       const recommendation = phaseRecommendation(judgment, ctx.model?.id, phaseConfig);
+      lastJudgment = judgment;
+      lastRecommendation = recommendation;
 
       ctx.ui.setStatus(PHASE_STATUS_KEY, formatPhaseNudge(recommendation, footer));
       ctx.ui.setStatus(
@@ -350,7 +371,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       await runVerification(apiKey, ctx);
     }
 
-    if (phaseEnabled && Object.keys(phaseConfig.routes).length > 0) {
+    if (phaseEnabled) {
       await runPhaseJudgment(apiKey, ctx);
     }
   });
