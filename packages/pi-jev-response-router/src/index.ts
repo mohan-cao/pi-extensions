@@ -49,108 +49,131 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     return auth?.auth.apiKey;
   }
 
+  function booleanToggle(value: string): boolean | undefined {
+    if (value === "on") return true;
+    if (value === "off") return false;
+    return undefined;
+  }
+
+  function setEnabled(value: boolean, ctx: ExtensionContext): void {
+    enabled = value;
+    persist();
+    if (!enabled) ctx.ui.setStatus(VERIFY_STATUS_KEY, undefined);
+    ctx.ui.notify(`Jev response router ${enabled ? "enabled" : "disabled"}`, "info");
+  }
+
+  function setDebug(rest: string, ctx: ExtensionContext): void {
+    const next = booleanToggle(rest);
+    if (next === undefined) {
+      ctx.ui.notify("Usage: /jev-router debug on|off", "warning");
+      return;
+    }
+    debug = next;
+    persist();
+    ctx.ui.notify(`Jev response router debug notifications ${next ? "enabled" : "disabled"}`, "info");
+  }
+
+  function setVerify(rest: string, ctx: ExtensionContext): void {
+    const next = booleanToggle(rest);
+    if (next === undefined) {
+      ctx.ui.notify("Usage: /jev-router verify on|off", "warning");
+      return;
+    }
+    verifyEnabled = next;
+    persist();
+    if (!verifyEnabled) ctx.ui.setStatus(VERIFY_STATUS_KEY, undefined);
+    ctx.ui.notify(`Jev post-generation verification ${next ? "enabled" : "disabled"}`, "info");
+  }
+
+  function setFooter(rest: string, ctx: ExtensionContext): void {
+    if (!(FOOTER_MODES as readonly string[]).includes(rest)) {
+      ctx.ui.notify(`Unknown footer mode "${rest}". Use: ${FOOTER_MODES.join(", ")}.`, "warning");
+      return;
+    }
+    footer = rest as FooterMode;
+    persist();
+    ctx.ui.notify(`Jev footer mode: ${footer}`, "info");
+  }
+
+  function clearCache(ctx: ExtensionContext): void {
+    cache.clear();
+    ctx.ui.notify("Jev classification cache cleared", "info");
+  }
+
+  async function reportStatus(ctx: ExtensionContext): Promise<void> {
+    const auth = await ctx.modelRegistry.getProviderAuth(JEV_PROVIDER_ID);
+    const authState = auth?.auth.apiKey
+      ? `authenticated (${auth.source ?? "configured"})`
+      : "not authenticated";
+    ctx.ui.notify(
+      [
+        `Jev router: ${enabled ? "on" : "off"}`,
+        `verify=${verifyEnabled ? "on" : "off"}`,
+        `debug=${debug ? "on" : "off"}`,
+        `footer=${footer}`,
+        authState,
+        `model=${config.model}`,
+        `thresholds: decomp>=${config.decompositionThreshold}, bounded>=${config.boundedVerificationThreshold}`,
+        `history=${config.historyTurns} turns`,
+        `cache=${cache.size}/${config.cacheMaxEntries}`,
+        `prefs=${preferencesPath()}`,
+      ].join("; "),
+      "info",
+    );
+  }
+
+  async function runClassify(prompt: string, ctx: ExtensionContext): Promise<void> {
+    const apiKey = await resolveApiKey(ctx);
+    if (!apiKey) {
+      ctx.ui.notify(
+        "Jev is not authenticated. Run /login and select TypeSafe Jev (response router).",
+        "warning",
+      );
+      return;
+    }
+
+    try {
+      const decision = await classifyWithJev(prompt, apiKey, config, ctx.signal);
+      ctx.ui.notify(`Jev: ${formatDecision(decision)}`, "info");
+    } catch (error) {
+      ctx.ui.notify(
+        `Jev classification failed: ${error instanceof Error ? error.message : String(error)}`,
+        "error",
+      );
+    }
+  }
+
+  type Command = (rest: string, ctx: ExtensionContext) => void | Promise<void>;
+
+  const reportStatusCommand: Command = (_rest, ctx) => reportStatus(ctx);
+
+  const commands = new Map<string, Command>([
+    ["on", (_rest, ctx) => setEnabled(true, ctx)],
+    ["off", (_rest, ctx) => setEnabled(false, ctx)],
+    ["debug", setDebug],
+    ["verify", setVerify],
+    ["footer", setFooter],
+    ["clear-cache", (_rest, ctx) => clearCache(ctx)],
+    [
+      "classify",
+      (rest, ctx) => {
+        if (!rest) {
+          ctx.ui.notify("Usage: /jev-router classify <text>", "warning");
+          return;
+        }
+        return runClassify(rest, ctx);
+      },
+    ],
+    ["status", reportStatusCommand],
+  ]);
+
   pi.registerCommand("jev-router", {
     description:
       "Control/test the Jev response router: status | on | off | debug on|off | verify on|off | footer compact|icons|off | clear-cache | classify <text>",
     handler: async (rawArgs, ctx) => {
-      const args = rawArgs.trim();
-
-      if (args === "on") {
-        enabled = true;
-        persist();
-        ctx.ui.notify("Jev response router enabled", "info");
-        return;
-      }
-      if (args === "off") {
-        enabled = false;
-        persist();
-        ctx.ui.setStatus(VERIFY_STATUS_KEY, undefined);
-        ctx.ui.notify("Jev response router disabled", "info");
-        return;
-      }
-      if (args === "debug on") {
-        debug = true;
-        persist();
-        ctx.ui.notify("Jev response router debug notifications enabled", "info");
-        return;
-      }
-      if (args === "debug off") {
-        debug = false;
-        persist();
-        ctx.ui.notify("Jev response router debug notifications disabled", "info");
-        return;
-      }
-      if (args === "verify on") {
-        verifyEnabled = true;
-        persist();
-        ctx.ui.notify("Jev post-generation verification enabled", "info");
-        return;
-      }
-      if (args === "verify off") {
-        verifyEnabled = false;
-        persist();
-        ctx.ui.setStatus(VERIFY_STATUS_KEY, undefined);
-        ctx.ui.notify("Jev post-generation verification disabled", "info");
-        return;
-      }
-      if (args.startsWith("footer ")) {
-        const mode = args.slice("footer ".length).trim();
-        if (!(FOOTER_MODES as readonly string[]).includes(mode)) {
-          ctx.ui.notify(`Unknown footer mode "${mode}". Use: compact, icons, off.`, "warning");
-          return;
-        }
-        footer = mode as FooterMode;
-        persist();
-        ctx.ui.notify(`Jev footer mode: ${footer}`, "info");
-        return;
-      }
-      if (args === "clear-cache") {
-        cache.clear();
-        ctx.ui.notify("Jev classification cache cleared", "info");
-        return;
-      }
-      if (args.startsWith("classify ")) {
-        const apiKey = await resolveApiKey(ctx);
-        if (!apiKey) {
-          ctx.ui.notify(
-            "Jev is not authenticated. Run /login and select TypeSafe Jev (response router).",
-            "warning",
-          );
-          return;
-        }
-
-        const prompt = args.slice("classify ".length).trim();
-        try {
-          const decision = await classifyWithJev(prompt, apiKey, config, ctx.signal);
-          ctx.ui.notify(`Jev: ${formatDecision(decision)}`, "info");
-        } catch (error) {
-          ctx.ui.notify(
-            `Jev classification failed: ${error instanceof Error ? error.message : String(error)}`,
-            "error",
-          );
-        }
-        return;
-      }
-
-      const auth = await ctx.modelRegistry.getProviderAuth(JEV_PROVIDER_ID);
-      const authState = auth?.auth.apiKey
-        ? `authenticated (${auth.source ?? "configured"})`
-        : "not authenticated";
-      ctx.ui.notify(
-        [
-          `Jev router: ${enabled ? "on" : "off"}`,
-          `verify=${verifyEnabled ? "on" : "off"}`,
-          `debug=${debug ? "on" : "off"}`,
-          `footer=${footer}`,
-          authState,
-          `model=${config.model}`,
-          `thresholds: decomp>=${config.decompositionThreshold}, bounded>=${config.boundedVerificationThreshold}`,
-          `history=${config.historyTurns} turns`,
-          `cache=${cache.size}/${config.cacheMaxEntries}`,
-          `prefs=${preferencesPath()}`,
-        ].join("; "),
-        "info",
-      );
+      const [verb = "", ...rest] = rawArgs.trim().split(/\s+/);
+      const command = commands.get(verb) ?? reportStatusCommand;
+      await command(rest.join(" "), ctx);
     },
   });
 
