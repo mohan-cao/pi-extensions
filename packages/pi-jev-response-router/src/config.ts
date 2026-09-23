@@ -1,4 +1,4 @@
-import type { RouterConfig } from "@mohan-cao/jev-classifier";
+import type { PhaseConfig, RouterConfig } from "@mohan-cao/jev-classifier";
 
 function numberFromEnv(name: string, fallback: number): number {
   const value = process.env[name];
@@ -52,5 +52,28 @@ export function loadConfig(): RouterConfig {
       0,
       3,
     ),
+  };
+}
+
+/**
+ * Semantic phase routing stays separate from model policy: Jev emits phases, and
+ * this map is the only place a provider or model name appears. The reverse
+ * lookup (model to phase) is what decides whether a nudge is warranted.
+ */
+export function loadPhaseConfig(): PhaseConfig {
+  const routes: PhaseConfig["routes"] = {};
+  const build = process.env.PI_JEV_PHASE_BUILD_MODEL;
+  const design = process.env.PI_JEV_PHASE_DESIGN_MODEL;
+  const general = process.env.PI_JEV_PHASE_GENERAL_MODEL;
+  if (build) routes.build = { model: build };
+  if (design) routes.design = { model: design };
+  if (general) routes.general = { model: general };
+
+  return {
+    routes,
+    phaseConfidenceThreshold: clamp(numberFromEnv("PI_JEV_PHASE_CONFIDENCE_THRESHOLD", 0.7), 0, 1),
+    implementationReadyThreshold: clamp(numberFromEnv("PI_JEV_PHASE_READY_THRESHOLD", 0.5), 0, 1),
+    trajectoryConfidenceThreshold: clamp(numberFromEnv("PI_JEV_TRAJECTORY_THRESHOLD", 0.7), 0, 1),
+    historyTurns: Math.max(0, Math.floor(numberFromEnv("PI_JEV_PHASE_HISTORY_TURNS", 8))),
   };
 }

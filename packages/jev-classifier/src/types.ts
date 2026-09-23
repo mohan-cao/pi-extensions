@@ -9,6 +9,12 @@ export type ResponseMode = (typeof RESPONSE_MODES)[number];
 export const FOOTER_MODES = ["compact", "icons", "off"] as const;
 export type FooterMode = (typeof FOOTER_MODES)[number];
 
+export const PHASES = ["build", "design", "general"] as const;
+export type Phase = (typeof PHASES)[number];
+
+export const TRAJECTORIES = ["converging", "stuck_detail", "stuck_framing", "early"] as const;
+export type Trajectory = (typeof TRAJECTORIES)[number];
+
 /** Raw Jev signals that drive the composed decision, each in [0, 1]. */
 export interface ClassificationSignals {
   /** P(the request requires decomposition before a reliable answer). */
@@ -64,6 +70,51 @@ export interface ClassificationState {
 export interface HistoryTurn {
   role: "user" | "assistant";
   text: string;
+}
+
+/** What the post-generation phase judge observed about the conversation. */
+export interface PhaseJudgment {
+  /** The phase the next work should be in. Never `stay` — that is a policy decision. */
+  phase: Phase;
+  phaseConfidence: number;
+  /** P(the material design decisions are settled enough to implement). */
+  implementationReady: number;
+  trajectory: Trajectory;
+  trajectoryConfidence: number;
+  model?: string;
+}
+
+export interface PhaseRoute {
+  model: string;
+  thinking?: string;
+  steering?: string;
+}
+
+/** Semantic routing stays separate from model policy. */
+export interface PhaseConfig {
+  /** phase → the model that serves it. Empty means the feature is inert. */
+  routes: Partial<Record<Phase, PhaseRoute>>;
+  /** Minimum Choice confidence before a routing nudge is shown. */
+  phaseConfidenceThreshold: number;
+  /** Minimum P(implementation ready) to corroborate a `design → build` move. */
+  implementationReadyThreshold: number;
+  /** Minimum Choice confidence before a stuck-pattern hint is shown. */
+  trajectoryConfidenceThreshold: number;
+  /** Conversation turns supplied to the phase judge. */
+  historyTurns: number;
+}
+
+/**
+ * Present only when the running model is known to serve a different phase than
+ * the work is moving into. An unmapped current model yields no nudge — we cannot
+ * say it is wrong.
+ */
+export interface PhaseRecommendation {
+  phase: Phase;
+  /** The model configured for that phase, when the routes map has one. */
+  model?: string;
+  /** The phase the running model serves. */
+  currentPhase: Phase;
 }
 
 export interface JevNoulAnswer {

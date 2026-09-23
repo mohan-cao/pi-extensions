@@ -17,6 +17,7 @@ export interface Preferences {
   enabled?: boolean;
   debug?: boolean;
   verify?: boolean;
+  phase?: boolean;
   footer?: FooterMode;
 }
 
@@ -45,6 +46,7 @@ export function loadPreferences(): Preferences {
     if (typeof record.enabled === "boolean") preferences.enabled = record.enabled;
     if (typeof record.debug === "boolean") preferences.debug = record.debug;
     if (typeof record.verify === "boolean") preferences.verify = record.verify;
+    if (typeof record.phase === "boolean") preferences.phase = record.phase;
     if (isFooterMode(record.footer)) preferences.footer = record.footer;
     return preferences;
   } catch {

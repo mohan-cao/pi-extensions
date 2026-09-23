@@ -23,6 +23,13 @@ export interface ScoreQuestionSpec {
   criteria: string[];
 }
 
+export interface ChoiceQuestionSpec {
+  type: "choice";
+  instructions: string;
+  /** Choice name → when it applies. */
+  criteria: Record<string, string>;
+}
+
 export const DECOMPOSITION_QUESTION: NoulQuestionSpec = {
   type: "noul",
   instructions:
@@ -89,4 +96,43 @@ export const VERIFY_OBLIGATION_QUESTION: ScoreQuestionSpec = {
     "Partially met. Answered the literal question but left a material premise or missing input unaddressed.",
     "Not met. Technically true but misleading or unusable, because it ignored a false premise or the information the answer actually depends on.",
   ],
+};
+
+export const NEXT_PHASE_QUESTION: ChoiceQuestionSpec = {
+  type: "choice",
+  instructions:
+    "What should the primary next activity be, given what the conversation has established and what remains open? Judge the trajectory of the work — what has been decided and what is still unresolved — not the length or style of the most recent message.",
+  criteria: {
+    build:
+      "Implementation, tests, mechanical debugging, or straightforward code changes. The decisions needed to act are already settled.",
+    design:
+      "Architecture, ambiguous requirements, nuanced tradeoffs, adversarial review, or difficult debugging. Something material is still unresolved.",
+    general:
+      "General conversation, investigation, or mixed work that neither implementation nor design specifically describes.",
+  },
+};
+
+export const IMPLEMENTATION_READY_QUESTION: NoulQuestionSpec = {
+  type: "noul",
+  instructions:
+    "Has the conversation reached the point where the primary next activity should be implementation rather than further design or discussion? Consider whether the material design decisions are settled enough to act on.",
+  criteria: {
+    true: "The open design questions are settled enough that the next useful action is writing or changing code.",
+    false: "Material design questions remain open, or the conversation is still exploratory.",
+  },
+};
+
+export const TRAJECTORY_QUESTION: ChoiceQuestionSpec = {
+  type: "choice",
+  instructions:
+    "How is this conversation progressing? Judge the arc across recent turns — what has been resolved and what keeps recurring — not the quality or style of the most recent message.",
+  criteria: {
+    converging:
+      "Each turn resolves something. The work is moving toward a conclusion, decision, or deliverable.",
+    stuck_detail:
+      "Turns keep adding finer detail without resolving the underlying question or reaching a decision. The work has lost altitude.",
+    stuck_framing:
+      "Turns circle the same issue in different words. Progress is blocked by how the problem is framed, not by missing effort.",
+    early: "Too few turns, or too little substance, to judge progress.",
+  },
 };

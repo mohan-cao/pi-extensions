@@ -31,13 +31,14 @@ test("preferences round-trip through the agent dir", () => {
     assert.deepEqual(loadPreferences(), {});
 
     assert.equal(
-      savePreferences({ enabled: false, debug: true, verify: false, footer: "icons" }),
+      savePreferences({ enabled: false, debug: true, verify: false, phase: false, footer: "icons" }),
       true,
     );
     assert.deepEqual(loadPreferences(), {
       enabled: false,
       debug: true,
       verify: false,
+      phase: false,
       footer: "icons",
     });
   });
@@ -96,6 +97,13 @@ test("jev-router dispatches commands by verb", async () => {
 
     await handler("debug sideways", ctx);
     assert.match(last(), /Usage: \/jev-router debug on\|off/);
+
+    await handler("phase off", ctx);
+    assert.match(last(), /phase recommendation disabled/);
+    assert.equal(loadPreferences().phase, false);
+
+    await handler("phase sideways", ctx);
+    assert.match(last(), /Usage: \/jev-router phase on\|off/);
 
     await handler("footer icons", ctx);
     assert.match(last(), /footer mode: icons/);

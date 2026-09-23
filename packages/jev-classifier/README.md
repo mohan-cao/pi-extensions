@@ -75,6 +75,34 @@ as the residual, so `normal` never competes in an argmax. `premise_defect` is a 
 a mode, and is never applied to `bounded_verification`, which already emits a verdict and
 corrections.
 
+## Phase recommendation (shadow)
+
+The same package answers a second question after generation: *what should the next work be?* It
+is a separate call from verification because it needs conversation history, and history
+measurably contaminates a quality judgment.
+
+```ts
+const judgment = await judgePhase(turns, apiKey, config, signal);
+const recommendation = phaseRecommendation(judgment, ctx.model?.id, phaseConfig);
+const nudge = formatPhaseNudge(recommendation, "compact"); // "↪ build · <model>"
+const hint = formatCoaching(judgment, "compact", phaseConfig.trajectoryConfidenceThreshold);
+```
+
+| question | type | drives |
+| --- | --- | --- |
+| `next_phase` | Choice (build / design / general) | which model suits the next work |
+| `implementation_ready` | Noul | corroborates a `design → build` move |
+| `trajectory` | Choice (converging / stuck_detail / stuck_framing / early) | the coaching hint |
+
+It is a **report, not a controller**. Jev never emits `stay` — whether a recommendation is shown
+is decided in code by comparing the observed phase to the phase the running model serves. An
+unmapped model yields no nudge, because we cannot say it is wrong. `trajectory` is display-only
+and never gates a recommendation.
+
+The thresholds are measured, not guessed: the coaching gate is `0.7` because a design
+conversation with open questions scores `0.45` on `stuck_detail` while genuine stuck cases score
+`0.98–1.00`.
+
 ## Design notes
 
 **Observe vs decide.** Jev only observes — what shape the request needs, whether a premise is

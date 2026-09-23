@@ -3,14 +3,19 @@ import test from "node:test";
 
 import {
   FOOTER_MODES,
+  PHASES,
   TtlCache,
   buildState,
   classifyWithJev,
   composeMode,
+  formatCoaching,
+  formatPhaseNudge,
   formatVerifyStatus,
+  parseChoiceAnswer,
   parseClassificationResponse,
   parseNoulAnswer,
   parseScoreAnswer,
+  phaseRecommendation,
   policyFor,
   premisePolicyFor,
 } from "../dist/index.js";
@@ -217,4 +222,113 @@ test("formatVerifyStatus renders by footer mode and clears when ok", () => {
 
 test("footer modes are the documented set", () => {
   assert.deepEqual([...FOOTER_MODES], ["compact", "icons", "off"]);
+});
+
+const phaseConfig = {
+  routes: {
+    build: { model: "build-model" },
+    design: { model: "design-model" },
+    general: { model: "general-model" },
+  },
+  phaseConfidenceThreshold: 0.7,
+  implementationReadyThreshold: 0.5,
+  trajectoryConfidenceThreshold: 0.7,
+  historyTurns: 8,
+};
+
+function judgment(overrides = {}) {
+  return {
+    phase: "build",
+    phaseConfidence: 0.9,
+    implementationReady: 0.9,
+    trajectory: "converging",
+    trajectoryConfidence: 0.9,
+    ...overrides,
+  };
+}
+
+test("phaseRecommendation fires only on a known mismatch", () => {
+  // On the design model, work moving to build, corroborated.
+  assert.deepEqual(phaseRecommendation(judgment(), "design-model", phaseConfig), {
+    phase: "build",
+    model: "build-model",
+    currentPhase: "design",
+  });
+  // Already on the right model.
+  assert.equal(phaseRecommendation(judgment(), "build-model", phaseConfig), undefined);
+  // Unmapped model — we cannot say it is wrong, so stay quiet.
+  assert.equal(phaseRecommendation(judgment(), "something-else", phaseConfig), undefined);
+  // Low phase confidence.
+  assert.equal(
+    phaseRecommendation(judgment({ phaseConfidence: 0.4 }), "design-model", phaseConfig),
+    undefined,
+  );
+});
+
+test("design to build requires implementation_ready", () => {
+  assert.equal(
+    phaseRecommendation(judgment({ implementationReady: 0.2 }), "design-model", phaseConfig),
+    undefined,
+  );
+  // The gate applies only to that transition.
+  assert.ok(
+    phaseRecommendation(
+      judgment({ phase: "general", implementationReady: 0.2 }),
+      "design-model",
+      phaseConfig,
+    ),
+  );
+});
+
+test("formatPhaseNudge renders by footer mode", () => {
+  const recommendation = phaseRecommendation(judgment(), "design-model", phaseConfig);
+  assert.equal(formatPhaseNudge(recommendation), "↪ build · build-model");
+  assert.equal(formatPhaseNudge(recommendation, "icons"), "↪🔨");
+  assert.equal(formatPhaseNudge(recommendation, "off"), undefined);
+  assert.equal(formatPhaseNudge(undefined), undefined);
+});
+
+test("formatCoaching gates on trajectory confidence", () => {
+  assert.equal(formatCoaching(judgment()), undefined);
+  assert.equal(
+    formatCoaching(judgment({ trajectory: "stuck_detail", trajectoryConfidence: 0.98 })),
+    "♾️ paralysis",
+  );
+  assert.equal(
+    formatCoaching(judgment({ trajectory: "stuck_framing", trajectoryConfidence: 1 }), "icons"),
+    "🖼️",
+  );
+  // Below threshold — the false positive the eval measured at 0.45.
+  assert.equal(
+    formatCoaching(judgment({ trajectory: "stuck_detail", trajectoryConfidence: 0.45 })),
+    undefined,
+  );
+});
+
+test("parseChoiceAnswer validates the choice against the allowed set", () => {
+  const parsed = parseChoiceAnswer(
+    {
+      answers: {
+        next_phase: { type: "choice", choice: "build", confidence: 0.9, probabilities: { build: 0.9 } },
+      },
+    },
+    "next_phase",
+    PHASES,
+  );
+  assert.equal(parsed.choice, "build");
+  assert.equal(parsed.confidence, 0.9);
+
+  assert.throws(
+    () =>
+      parseChoiceAnswer(
+        {
+          answers: {
+            next_phase: { type: "choice", choice: "nonsense", confidence: 1, probabilities: {} },
+          },
+        },
+        "next_phase",
+        PHASES,
+      ),
+    /Unexpected next_phase choice/,
+  );
 });
