@@ -93,6 +93,18 @@ Display-only. It never gates the model nudge and never changes routing.
 | `PI_JEV_TRAJECTORY_THRESHOLD` | `0.7` | Minimum confidence before a coaching hint |
 | `PI_JEV_TRAJECTORY_HISTORY_TURNS` | `8` | Conversation turns supplied to the trajectory judge |
 
+### Decision log
+
+On by default: one JSON line per settled turn at `~/.pi/agent/jev-decisions.jsonl`
+(`/jev-router log on|off`). It records **judgments, not conversation text** — the classification
+mode and signals, the verification result, the phase and trajectory judgments, and the model
+that answered.
+
+Acceptance of a model nudge is derived by diffing consecutive records: if `recommendedModel` at
+turn N equals `modelRunning` at turn N+1, the nudge was acted on. That is the only correctness
+proxy available without hand-labelling — and it only produces data when routes are configured,
+since without them no nudge ever fires.
+
 ### Install from npm
 
 ```bash
@@ -118,6 +130,8 @@ You can also provide `TYPESAFE_API_KEY` in the environment. An explicitly stored
 /jev-router phase off
 /jev-router coaching on
 /jev-router coaching off
+/jev-router log on
+/jev-router log off
 /jev-router debug on
 /jev-router debug off
 /jev-router footer compact

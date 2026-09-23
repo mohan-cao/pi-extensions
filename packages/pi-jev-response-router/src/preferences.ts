@@ -19,6 +19,7 @@ export interface Preferences {
   verify?: boolean;
   phase?: boolean;
   coaching?: boolean;
+  log?: boolean;
   footer?: FooterMode;
 }
 
@@ -33,6 +34,9 @@ function isFooterMode(value: unknown): value is FooterMode {
   return typeof value === "string" && (FOOTER_MODES as readonly string[]).includes(value);
 }
 
+/** Boolean preference keys, so adding one does not add another near-identical guard. */
+const BOOLEAN_KEYS = ["enabled", "debug", "verify", "phase", "coaching", "log"] as const;
+
 /** Missing, unreadable, or corrupt files yield `{}` rather than throwing. */
 export function loadPreferences(): Preferences {
   const path = preferencesPath();
@@ -44,11 +48,11 @@ export function loadPreferences(): Preferences {
 
     const record = parsed as Record<string, unknown>;
     const preferences: Preferences = {};
-    if (typeof record.enabled === "boolean") preferences.enabled = record.enabled;
-    if (typeof record.debug === "boolean") preferences.debug = record.debug;
-    if (typeof record.verify === "boolean") preferences.verify = record.verify;
-    if (typeof record.phase === "boolean") preferences.phase = record.phase;
-    if (typeof record.coaching === "boolean") preferences.coaching = record.coaching;
+    for (const key of BOOLEAN_KEYS) {
+      const value = record[key];
+      // Untrusted JSON: only a real boolean is accepted, not a truthy string.
+      if (typeof value === "boolean") preferences[key] = value;
+    }
     if (isFooterMode(record.footer)) preferences.footer = record.footer;
     return preferences;
   } catch {
