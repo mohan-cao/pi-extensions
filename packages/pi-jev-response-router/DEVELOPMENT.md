@@ -74,9 +74,15 @@ pnpm build      # pnpm -r build
 pnpm test       # pnpm -r test
 ```
 
-The publish workflow and local development both use pnpm for install/build/test;
-only the final `npm publish` uses npm, so that npm trusted publishing (OIDC)
-handles authentication and provenance.
+The publish workflow uses pnpm for install/build/test and for `pnpm pack`, which
+rewrites the `workspace:` protocol to a concrete range. The packed tarball is then
+published with `npm publish`, so npm trusted publishing (OIDC) handles
+authentication and provenance.
+
+Packing with pnpm is **not optional**. `npm publish` ships `workspace:` verbatim,
+and no npm consumer can resolve it — installing the result fails with
+`EUNSUPPORTEDPROTOCOL`. The workflow verifies the packed manifest and fails if any
+`workspace:` range survives.
 
 For a user-local Pi install directly from the working tree:
 
