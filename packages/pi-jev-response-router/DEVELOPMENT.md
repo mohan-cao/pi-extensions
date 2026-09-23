@@ -1,3 +1,20 @@
+# pi-jev-response-router — design notes and development
+
+## Package layout
+
+Two packages, split on the harness boundary:
+
+| package | contains |
+| --- | --- |
+| `packages/jev-classifier` | questions, transport, classification, policies, verification, cache. No harness code, no dependencies. |
+| `packages/pi-jev-response-router` | Pi hooks, credential provider, session history, preferences, footer status. |
+
+`pi-jev-response-router` depends on `@mohan-cao/jev-classifier`. The core never sees a harness:
+it takes an API key, conversation history, and a config, and returns decisions. That is why the
+core has no dependencies and this package has no classification logic.
+
+**Publish order matters** — `jev-classifier` first, then `pi-jev-response-router`.
+
 ## Why `before_agent_start` instead of rewriting user input?
 
 The classifier runs in Pi's `before_agent_start` hook after skill/template
@@ -104,6 +121,10 @@ publishing (OIDC, no token, provenance attached).
 A repo-wide `v*` tag does **not** trigger a release, and releasing one package
 never requires bumping or tagging the others. Each package needs its own
 one-time trusted-publisher entry on npmjs.com pointing at `publish.yml`.
+
+Because `pi-jev-response-router` depends on `jev-classifier`, publish the core
+first — otherwise the extension installs against a version that is not on the
+registry yet.
 
 ## Future Langfuse loop
 

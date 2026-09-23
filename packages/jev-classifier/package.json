@@ -1,21 +1,20 @@
 {
-  "name": "@mohan-cao/pi-jev-response-router",
-  "version": "0.3.0",
-  "description": "Pi extension that uses TypeSafe Jev to route each request into bounded verification, decomposition, or normal response policy.",
+  "name": "@mohan-cao/jev-classifier",
+  "version": "0.1.0",
+  "description": "Harness-agnostic System One (Jev) classifier: request classification, response-shaping policies, and post-generation verification.",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mohan-cao/pi-extensions.git",
-    "directory": "packages/pi-jev-response-router"
+    "directory": "packages/jev-classifier"
   },
   "keywords": [
-    "pi-package",
-    "pi-extension",
     "jev",
     "typesafe-ai",
+    "system-one",
     "classifier",
-    "response-router"
+    "llm"
   ],
   "engines": {
     "node": ">=20"
@@ -30,18 +29,6 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
-  },
-  "pi": {
-    "extensions": [
-      "./dist/index.js"
-    ]
-  },
-  "peerDependencies": {
-    "@earendil-works/pi-ai": "*",
-    "@earendil-works/pi-coding-agent": "*"
-  },
-  "dependencies": {
-    "@mohan-cao/jev-classifier": "workspace:^"
   },
   "scripts": {
     "clean": "rm -rf dist",

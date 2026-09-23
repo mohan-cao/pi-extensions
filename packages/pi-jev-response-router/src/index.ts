@@ -1,16 +1,23 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import { TtlCache } from "./cache.js";
+import {
+  FOOTER_MODES,
+  TtlCache,
+  classifyWithJev,
+  formatVerifyStatus,
+  policyFor,
+  premisePolicyFor,
+  verifyResponse,
+  type ClassificationResult,
+  type FooterMode,
+} from "@mohan-cao/jev-classifier";
+
 import { loadConfig } from "./config.js";
 import { lastExchange, recentHistory } from "./context.js";
-import { classifyWithJev } from "./jev-client.js";
-import { policyFor, premisePolicyFor } from "./policies.js";
 import { loadPreferences, preferencesPath, savePreferences } from "./preferences.js";
 import { JEV_PROVIDER_ID, registerJevAuthProvider } from "./provider.js";
-import { FOOTER_MODES, type ClassificationResult, type FooterMode } from "./types.js";
-import { formatVerifyStatus, verifyResponse } from "./verify.js";
 
-/** System-prompt section key. Pi wraps the value in a tag of the same name. */
+/** System-prompt section keys. Pi wraps each value in a tag of the same name. */
 const POLICY_SECTION = "jev-response-policy";
 const PREMISE_SECTION = "jev-premise-policy";
 const VERIFY_STATUS_KEY = "jev-verify";
@@ -279,22 +286,29 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
   });
 }
 
+// Re-export the core surface so existing consumers keep working.
 export {
+  FOOTER_MODES,
+  TtlCache,
+  buildState,
   classifyWithJev,
+  composeMode,
+  formatVerifyStatus,
   parseClassificationResponse,
   parseNoulAnswer,
   parseScoreAnswer,
-} from "./jev-client.js";
-export { policyFor, premisePolicyFor } from "./policies.js";
-export { verifyResponse, formatVerifyStatus } from "./verify.js";
-export { TtlCache } from "./cache.js";
-export { loadPreferences, preferencesPath, savePreferences } from "./preferences.js";
-export type { Preferences } from "./preferences.js";
-export { FOOTER_MODES } from "./types.js";
+  policyFor,
+  premisePolicyFor,
+  verifyResponse,
+} from "@mohan-cao/jev-classifier";
 export type {
   ClassificationResult,
+  ClassificationSignals,
   FooterMode,
   ResponseMode,
   RouterConfig,
-} from "./types.js";
-export type { VerifyResult, VerifyFlag } from "./verify.js";
+  VerifyFlag,
+  VerifyResult,
+} from "@mohan-cao/jev-classifier";
+export { loadPreferences, preferencesPath, savePreferences } from "./preferences.js";
+export type { Preferences } from "./preferences.js";

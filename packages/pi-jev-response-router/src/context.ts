@@ -1,9 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-export interface HistoryTurn {
-  role: "user" | "assistant";
-  text: string;
-}
+import type { HistoryTurn } from "@mohan-cao/jev-classifier";
 
 const MAX_TURN_CHARS = 2_000;
 
@@ -64,14 +61,6 @@ export function recentHistory(
   }
 
   return collected.slice(-turns * 2);
-}
-
-export function buildState(prompt: string, history: HistoryTurn[]): unknown {
-  if (history.length === 0) return { user_request: prompt };
-  return {
-    recent_conversation: history.map((turn) => `${turn.role}: ${turn.text}`),
-    user_request: prompt,
-  };
 }
 
 export interface Exchange {
