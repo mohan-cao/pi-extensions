@@ -101,7 +101,7 @@ export const VERIFY_OBLIGATION_QUESTION: ScoreQuestionSpec = {
 export const NEXT_PHASE_QUESTION: ChoiceQuestionSpec = {
   type: "choice",
   instructions:
-    "What should the primary next activity be, given what the conversation has established and what remains open? Judge the trajectory of the work — what has been decided and what is still unresolved — not the length or style of the most recent message.",
+    "What kind of work does this conversation need next? Judge the subject matter — what has been settled and what is still open — not how smoothly the conversation has been going.",
   criteria: {
     build:
       "Implementation, tests, mechanical debugging, or straightforward code changes. The decisions needed to act are already settled.",
@@ -112,27 +112,17 @@ export const NEXT_PHASE_QUESTION: ChoiceQuestionSpec = {
   },
 };
 
-export const IMPLEMENTATION_READY_QUESTION: NoulQuestionSpec = {
-  type: "noul",
-  instructions:
-    "Has the conversation reached the point where the primary next activity should be implementation rather than further design or discussion? Consider whether the material design decisions are settled enough to act on.",
-  criteria: {
-    true: "The open design questions are settled enough that the next useful action is writing or changing code.",
-    false: "Material design questions remain open, or the conversation is still exploratory.",
-  },
-};
-
 export const TRAJECTORY_QUESTION: ChoiceQuestionSpec = {
   type: "choice",
   instructions:
-    "How is this conversation progressing? Judge the arc across recent turns — what has been resolved and what keeps recurring — not the quality or style of the most recent message.",
+    "Is this conversation making progress, independent of what it is about? Judge the pattern across recent turns — is each turn covering new ground and resolving something, or is ground being revisited at increasing depth or in different words?",
   criteria: {
     converging:
-      "Each turn resolves something. The work is moving toward a conclusion, decision, or deliverable.",
+      "Each turn covers new ground and resolves something. The conversation is moving toward a conclusion or decision.",
     stuck_detail:
-      "Turns keep adding finer detail without resolving the underlying question or reaching a decision. The work has lost altitude.",
+      "Turns keep going deeper into detail without resolving anything or reaching a decision.",
     stuck_framing:
-      "Turns circle the same issue in different words. Progress is blocked by how the problem is framed, not by missing effort.",
+      "Turns revisit the same issue in different words. Progress is blocked by how the problem is framed, not by missing effort.",
     early: "Too few turns, or too little substance, to judge progress.",
   },
 };

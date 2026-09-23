@@ -80,7 +80,6 @@ itself once you do. Without routes configured the feature is inert.
 | `PI_JEV_PHASE_DESIGN_MODEL` | unset | Model that serves the `design` phase |
 | `PI_JEV_PHASE_GENERAL_MODEL` | unset | Model that serves the `general` phase |
 | `PI_JEV_PHASE_CONFIDENCE_THRESHOLD` | `0.7` | Minimum Choice confidence before a routing nudge |
-| `PI_JEV_PHASE_READY_THRESHOLD` | `0.5` | P(implementation ready) needed to corroborate `design → build` |
 | `PI_JEV_TRAJECTORY_THRESHOLD` | `0.7` | Minimum confidence before a stuck-pattern hint |
 | `PI_JEV_PHASE_HISTORY_TURNS` | `8` | Conversation turns supplied to the phase judge |
 

@@ -116,7 +116,7 @@ Everything that observes goes to Jev. Everything that decides goes to code.
 | --- | --- |
 | `next_phase` (Choice: build / design / general) | whether `workPhase !== modelPhase` |
 | `confidence` for that choice | whether confidence clears the display threshold |
-| `implementation_ready` (Noul, 0–1) | whether to corroborate a `design → build` transition |
+| `trajectory` (Choice) | whether to show a coaching hint |
 | | which model to name in the footer (config lookup) |
 | | whether to render anything at all |
 
@@ -128,10 +128,9 @@ Jev. The classifier emits semantics; the policy layer owns models.
 ```ts
 NEXT_PHASE_QUESTION: choice
   instructions:
-    "What should the primary next activity be, given what the conversation has
-     established and what remains open? Judge the trajectory of the work — what has
-     been decided and what is still unresolved — not the length or style of the
-     most recent message."
+    "What kind of work does this conversation need next? Judge the subject matter —
+     what has been settled and what is still open — not how smoothly the conversation
+     has been going."
   criteria:
     build:   "Implementation, tests, mechanical debugging, or straightforward code
               changes. The decisions needed to act are already settled."
@@ -140,23 +139,36 @@ NEXT_PHASE_QUESTION: choice
     general: "General conversation, investigation, or mixed work that neither
               implementation nor design specifically describes."
 
-IMPLEMENTATION_READY_QUESTION: noul
+TRAJECTORY_QUESTION: choice
   instructions:
-    "Has the conversation reached the point where the primary next activity should be
-     implementation rather than further design or discussion? Consider whether the
-     material design decisions are settled enough to act on."
+    "Is this conversation making progress, independent of what it is about? Judge the
+     pattern across recent turns — is each turn covering new ground and resolving
+     something, or is ground being revisited at increasing depth or in different words?"
   criteria:
-    true:  "The open design questions are settled enough that the next useful action is
-            writing or changing code."
-    false: "Material design questions remain open, or the conversation is still
-            exploratory."
+    converging:    "Each turn covers new ground and resolves something."
+    stuck_detail:  "Turns keep going deeper into detail without resolving anything."
+    stuck_framing: "Turns revisit the same issue in different words."
+    early:         "Too few turns, or too little substance, to judge progress."
 ```
 
-`implementation_ready` exists because `design → build` is the noisy transition: a reasoning
-model under design-shaped steering will keep producing design-shaped work, so the phase
-Choice alone over-reports `design`. The Noul is an independent second read. If the phase
-Choice alone proves sufficient in evaluation, drop it — but do not fold it into a `reason`
-string, because it gates behaviour and must stay a tunable number.
+### Why the wording was separated
+
+The first draft told `next_phase` to "judge the trajectory of the work — what has been decided
+and what is still unresolved", which is the same instruction `trajectory` gets. Both questions
+were asked to do the same reasoning and then emit different labels.
+
+Separating the bases — phase judges the subject matter, trajectory judges the process pattern —
+left every label unchanged but raised confidence where it was weak: `framing-loop`'s phase
+confidence went **0.50 → 0.90**, and `build-ambiguity`'s converging confidence **0.35 → 0.68**.
+The overlap was costing confidence, not correctness.
+
+### `implementation_ready` was removed
+
+It restated `next_phase` — "has the conversation reached the point where the primary next
+activity should be implementation" is the same question — and the eval showed it perfectly
+correlated with `next_phase == build` (0.91–0.93 when build, ≤ 0.09 otherwise). Dropping it
+changed no label and no confidence. A restatement cannot corroborate anything, which was its
+entire purpose.
 
 ## Trajectory diagnosis (coaching)
 
@@ -394,11 +406,12 @@ a coin flip).
 | signal | result |
 | --- | --- |
 | `next_phase` | correct on all eight cases (design-settled → build 1.00, build-ambiguity → design 1.00, general-chat → general 1.00) |
-| `implementation_ready` | bimodal — 0.91–0.93 when ready, ≤ 0.09 otherwise, so the 0.5 gate is unambiguous |
-| `trajectory` | one false positive: a design conversation with open questions reads `stuck_detail`, at confidence 0.45–0.47 versus 0.98–1.00 for the two genuine stuck cases — hence the 0.7 gate |
+| `implementation_ready` | redundant — perfectly correlated with `next_phase == build`; removed |
+| `trajectory` | `design-open` is a near-tie between `converging` and `stuck_detail` at ~0.30, flipping between runs; the two genuine stuck cases sit at 0.96–1.00 |
 
-The routing side needed no tuning. The coaching side needed the confidence gate, and the
-measured gap is wide enough that it is not a close call.
+The routing side needed no tuning. The coaching side needs the 0.7 gate, and the gap is wide
+enough that it is not a close call — `design-open` is *uncertain*, not wrong, and the gate
+suppresses it whichever label it lands on. That is the right mechanism, not a paper-over.
 
 ## Dependencies and sequencing
 
@@ -438,8 +451,10 @@ Kept here so they are not re-proposed.
 
 - Is the disagreement nudge useful at all, or is the "stuck" trend the real signal? The logs
   decide.
-- Does the phase Choice need `implementation_ready` as corroboration, or is the Choice alone
-  sufficient? Evaluate both.
+- ~~Does the phase Choice need `implementation_ready` as corroboration?~~ Answered: no. It
+  restated the phase question and changed nothing. If a real guard is wanted for `design →
+  build`, it must ask something `next_phase` does not — e.g. whether a concrete action is
+  available now.
 - Where should the last judgment live if trend tracking is added — session `custom` entry
   (survives reload, may be summarised by compaction) vs extension memory (lost on reload)?
   Only needed if "stuck" ships.
