@@ -75,32 +75,38 @@ as the residual, so `normal` never competes in an argmax. `premise_defect` is a 
 a mode, and is never applied to `bounded_verification`, which already emits a verdict and
 corrections.
 
-## Phase recommendation (shadow)
+## Two post-generation judgments
 
-The same package answers a second question after generation: *what should the next work be?* It
-is a separate call from verification because it needs conversation history, and history
-measurably contaminates a quality judgment.
+Both read the conversation, and each is its own call — separate from verification (which reads
+only the last exchange) and from each other. Questions sharing a call can perturb each other;
+`implementation_ready` did exactly that, which is why it was removed.
 
 ```ts
-const judgment = await judgePhase(turns, apiKey, config, signal);
-const recommendation = phaseRecommendation(judgment, ctx.model?.id, phaseConfig);
+// model nudge
+const phase = await judgePhase(turns, apiKey, config, signal);
+const recommendation = phaseRecommendation(phase, ctx.model?.id, phaseConfig);
 const nudge = formatPhaseNudge(recommendation, "compact"); // "↪ build · <model>"
-const hint = formatCoaching(judgment, "compact", phaseConfig.trajectoryConfidenceThreshold);
+
+// coaching hint
+const trajectory = await judgeTrajectory(turns, apiKey, config, signal);
+const hint = formatCoaching(trajectory, "compact", trajectoryConfig.trajectoryConfidenceThreshold);
 ```
 
-| question | type | drives |
+| question | judge | drives |
 | --- | --- | --- |
-| `next_phase` | Choice (build / design / general) | which model suits the next work |
-| `trajectory` | Choice (converging / stuck_detail / stuck_framing / early) | the coaching hint |
+| `next_phase` (build / design / general) | `judgePhase` | which model suits the next work |
+| `trajectory` (converging / stuck_detail / stuck_framing / early) | `judgeTrajectory` | the coaching hint |
 
-It is a **report, not a controller**. Jev never emits `stay` — whether a recommendation is shown
+They are **orthogonal**: a conversation can be stuck while implementing, or framing a problem
+badly during general conversation. Neither gates the other.
+
+The nudge is a **report, not a controller**. Jev never emits `stay` — whether a nudge is shown
 is decided in code by comparing the observed phase to the phase the running model serves. An
-unmapped model yields no nudge, because we cannot say it is wrong. `trajectory` is display-only
-and never gates a recommendation.
+unmapped model yields no nudge, because we cannot say it is wrong.
 
-The thresholds are measured, not guessed: the coaching gate is `0.7` because a design
-conversation with open questions scores `0.45` on `stuck_detail` while genuine stuck cases score
-`0.98–1.00`.
+Both gates are `0.7`, measured rather than guessed. `stuck_detail` requires *escalation or
+repetition*, not mere unresolvedness — an early design conversation that keeps opening questions
+is not a spiral.
 
 ## Design notes
 

@@ -72,11 +72,20 @@ export interface HistoryTurn {
   text: string;
 }
 
-/** What the post-generation phase judge observed about the conversation. */
+/** What the post-generation phase judge observed. */
 export interface PhaseJudgment {
   /** The phase the next work should be in. Never `stay` — that is a policy decision. */
   phase: Phase;
   phaseConfidence: number;
+  model?: string;
+}
+
+/**
+ * What the post-generation trajectory judge observed. Orthogonal to phase: a
+ * conversation can be stuck while implementing, or framing a problem badly
+ * during general conversation.
+ */
+export interface TrajectoryJudgment {
   trajectory: Trajectory;
   trajectoryConfidence: number;
   model?: string;
@@ -88,15 +97,21 @@ export interface PhaseRoute {
   steering?: string;
 }
 
-/** Semantic routing stays separate from model policy. */
+/** Model policy for the phase nudge. */
 export interface PhaseConfig {
   /** phase → the model that serves it. Empty means the feature is inert. */
   routes: Partial<Record<Phase, PhaseRoute>>;
   /** Minimum Choice confidence before a routing nudge is shown. */
   phaseConfidenceThreshold: number;
+  /** Conversation turns supplied to the phase judge. */
+  historyTurns: number;
+}
+
+/** Display policy for the coaching hint. */
+export interface TrajectoryConfig {
   /** Minimum Choice confidence before a stuck-pattern hint is shown. */
   trajectoryConfidenceThreshold: number;
-  /** Conversation turns supplied to the phase judge. */
+  /** Conversation turns supplied to the trajectory judge. */
   historyTurns: number;
 }
 

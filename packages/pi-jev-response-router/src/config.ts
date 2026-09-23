@@ -1,4 +1,4 @@
-import type { PhaseConfig, RouterConfig } from "@mohan-cao/jev-classifier";
+import type { PhaseConfig, RouterConfig, TrajectoryConfig } from "@mohan-cao/jev-classifier";
 
 function numberFromEnv(name: string, fallback: number): number {
   const value = process.env[name];
@@ -72,7 +72,14 @@ export function loadPhaseConfig(): PhaseConfig {
   return {
     routes,
     phaseConfidenceThreshold: clamp(numberFromEnv("PI_JEV_PHASE_CONFIDENCE_THRESHOLD", 0.7), 0, 1),
-    trajectoryConfidenceThreshold: clamp(numberFromEnv("PI_JEV_TRAJECTORY_THRESHOLD", 0.7), 0, 1),
     historyTurns: Math.max(0, Math.floor(numberFromEnv("PI_JEV_PHASE_HISTORY_TURNS", 8))),
+  };
+}
+
+/** Independent of phase: coaching is about the process, not the work's kind. */
+export function loadTrajectoryConfig(): TrajectoryConfig {
+  return {
+    trajectoryConfidenceThreshold: clamp(numberFromEnv("PI_JEV_TRAJECTORY_THRESHOLD", 0.7), 0, 1),
+    historyTurns: Math.max(0, Math.floor(numberFromEnv("PI_JEV_TRAJECTORY_HISTORY_TURNS", 8))),
   };
 }

@@ -8,6 +8,7 @@ import {
   formatPhaseNudge,
   formatVerifyStatus,
   judgePhase,
+  judgeTrajectory,
   phaseRecommendation,
   policyFor,
   premisePolicyFor,
@@ -15,6 +16,7 @@ import {
   type ClassificationResult,
   type PhaseJudgment,
   type PhaseRecommendation,
+  type TrajectoryJudgment,
 } from "@mohan-cao/jev-classifier";
 
 import {
@@ -22,7 +24,7 @@ import {
   createRouterCommandHandler,
   type RouterState,
 } from "./commands.js";
-import { loadConfig, loadPhaseConfig } from "./config.js";
+import { loadConfig, loadPhaseConfig, loadTrajectoryConfig } from "./config.js";
 import { lastExchange, recentHistory } from "./context.js";
 import { loadPreferences, preferencesPath, savePreferences } from "./preferences.js";
 import { JEV_PROVIDER_ID, registerJevAuthProvider } from "./provider.js";
@@ -45,6 +47,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
 
   const config = loadConfig();
   const phaseConfig = loadPhaseConfig();
+  const trajectoryConfig = loadTrajectoryConfig();
   const cache = new TtlCache<ClassificationResult>(config.cacheTtlMs, config.cacheMaxEntries);
 
   // Persisted preferences win over environment-derived defaults, so a command is
@@ -55,12 +58,14 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     debug: stored.debug ?? false,
     verify: stored.verify ?? config.verify,
     phase: stored.phase ?? true,
+    coaching: stored.coaching ?? true,
     footer: stored.footer ?? "compact",
   };
 
   // Kept for the status readout, so "why is nothing showing?" is answerable.
-  let lastJudgment: PhaseJudgment | undefined;
+  let lastPhase: PhaseJudgment | undefined;
   let lastRecommendation: PhaseRecommendation | undefined;
+  let lastTrajectory: TrajectoryJudgment | undefined;
 
   function persist(): boolean {
     return savePreferences({
@@ -68,6 +73,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       debug: state.debug,
       verify: state.verify,
       phase: state.phase,
+      coaching: state.coaching,
       footer: state.footer,
     });
   }
@@ -77,11 +83,15 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     return auth?.auth.apiKey;
   }
 
-  function describeLastJudgment(): string {
-    if (!lastJudgment) return "none yet";
-    const { phase, phaseConfidence, trajectory, trajectoryConfidence } = lastJudgment;
+  function describeLastPhase(): string {
+    if (!lastPhase) return "none yet";
     const nudge = lastRecommendation ? "" : " (no nudge)";
-    return `${phase}@${phaseConfidence.toFixed(2)} ${trajectory}@${trajectoryConfidence.toFixed(2)}${nudge}`;
+    return `${lastPhase.phase}@${lastPhase.phaseConfidence.toFixed(2)}${nudge}`;
+  }
+
+  function describeLastTrajectory(): string {
+    if (!lastTrajectory) return "none yet";
+    return `${lastTrajectory.trajectory}@${lastTrajectory.trajectoryConfidence.toFixed(2)}`;
   }
 
   async function reportStatus(ctx: ExtensionContext): Promise<void> {
@@ -95,6 +105,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         `Jev router: ${state.enabled ? "on" : "off"}`,
         `verify=${state.verify ? "on" : "off"}`,
         `phase=${state.phase ? "on" : "off"}`,
+        `coaching=${state.coaching ? "on" : "off"}`,
         `debug=${state.debug ? "on" : "off"}`,
         `footer=${state.footer}`,
         authState,
@@ -105,7 +116,8 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         `prefs=${preferencesPath()}`,
         `phaseRoutes=${routes.length > 0 ? routes.join(",") : "none (set PI_JEV_PHASE_*_MODEL)"}`,
         `currentModel=${ctx.model?.id ?? "unknown"}`,
-        `lastPhase=${describeLastJudgment()}`,
+        `lastPhase=${describeLastPhase()}`,
+        `lastTrajectory=${describeLastTrajectory()}`,
       ].join("; "),
       "info",
     );
@@ -171,18 +183,14 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     try {
       const judgment = await judgePhase(turns, apiKey, config, ctx.signal);
       const recommendation = phaseRecommendation(judgment, ctx.model?.id, phaseConfig);
-      lastJudgment = judgment;
+      lastPhase = judgment;
       lastRecommendation = recommendation;
 
       ctx.ui.setStatus(PHASE_STATUS_KEY, formatPhaseNudge(recommendation, state.footer));
-      ctx.ui.setStatus(
-        COACHING_STATUS_KEY,
-        formatCoaching(judgment, state.footer, phaseConfig.trajectoryConfidenceThreshold),
-      );
 
       if (state.debug) {
         ctx.ui.notify(
-          `Jev phase: ${judgment.phase} (conf=${judgment.phaseConfidence.toFixed(2)}, trajectory=${judgment.trajectory}@${judgment.trajectoryConfidence.toFixed(2)})`,
+          `Jev phase: ${judgment.phase} (conf=${judgment.phaseConfidence.toFixed(2)})`,
           "info",
         );
       }
@@ -191,6 +199,36 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       if (state.debug) {
         ctx.ui.notify(
           `Jev phase failed open: ${error instanceof Error ? error.message : String(error)}`,
+          "warning",
+        );
+      }
+    }
+  }
+
+  async function runTrajectoryJudgment(apiKey: string, ctx: ExtensionContext): Promise<void> {
+    const turns = recentHistory(ctx, trajectoryConfig.historyTurns, "");
+    if (turns.length === 0) return;
+
+    try {
+      const judgment = await judgeTrajectory(turns, apiKey, config, ctx.signal);
+      lastTrajectory = judgment;
+
+      ctx.ui.setStatus(
+        COACHING_STATUS_KEY,
+        formatCoaching(judgment, state.footer, trajectoryConfig.trajectoryConfidenceThreshold),
+      );
+
+      if (state.debug) {
+        ctx.ui.notify(
+          `Jev trajectory: ${judgment.trajectory} (conf=${judgment.trajectoryConfidence.toFixed(2)})`,
+          "info",
+        );
+      }
+    } catch (error) {
+      // Coaching is advisory; never let it affect the run.
+      if (state.debug) {
+        ctx.ui.notify(
+          `Jev trajectory failed open: ${error instanceof Error ? error.message : String(error)}`,
           "warning",
         );
       }
@@ -292,12 +330,24 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     const apiKey = await resolveApiKey(ctx);
     if (!apiKey) return;
 
-    if (state.verify) {
-      await runVerification(apiKey, ctx);
-    }
+    // Independent judgments, so run them concurrently: wall clock is the slowest,
+    // not the sum. Each catches its own errors, but allSettled means an unexpected
+    // throw in one cannot silently drop the others.
+    const judgments: Promise<void>[] = [];
+    if (state.verify) judgments.push(runVerification(apiKey, ctx));
+    if (state.phase) judgments.push(runPhaseJudgment(apiKey, ctx));
+    if (state.coaching) judgments.push(runTrajectoryJudgment(apiKey, ctx));
 
-    if (state.phase) {
-      await runPhaseJudgment(apiKey, ctx);
+    const settled = await Promise.allSettled(judgments);
+    if (state.debug) {
+      for (const result of settled) {
+        if (result.status === "rejected") {
+          ctx.ui.notify(
+            `Jev judgment rejected: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`,
+            "warning",
+          );
+        }
+      }
     }
   });
 }

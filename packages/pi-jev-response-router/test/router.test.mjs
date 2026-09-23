@@ -105,6 +105,13 @@ test("jev-router dispatches commands by verb", async () => {
     await handler("phase sideways", ctx);
     assert.match(last(), /Usage: \/jev-router phase on\|off/);
 
+    await handler("coaching off", ctx);
+    assert.match(last(), /coaching hint disabled/);
+    assert.equal(loadPreferences().coaching, false);
+
+    await handler("coaching sideways", ctx);
+    assert.match(last(), /Usage: \/jev-router coaching on\|off/);
+
     await handler("footer icons", ctx);
     assert.match(last(), /footer mode: icons/);
     assert.equal(loadPreferences().footer, "icons");

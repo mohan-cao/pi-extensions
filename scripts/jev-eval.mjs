@@ -204,6 +204,23 @@ const TRAJECTORY_QUESTION_V2 = {
   },
 };
 
+// v3: stuck_detail requires escalation or repetition, not mere unresolvedness. An
+// early design conversation that keeps opening questions is not a spiral.
+const TRAJECTORY_QUESTION_V3 = {
+  type: "choice",
+  instructions:
+    "Is this conversation making progress, independent of what it is about? Judge the pattern across recent turns — is each turn covering new ground, or is the same ground being reworked at increasing depth or in different words?",
+  criteria: {
+    converging:
+      "Each turn covers new ground and resolves something. The conversation is moving toward a conclusion or decision.",
+    stuck_detail:
+      "Turns keep escalating into finer detail on the same question, revisiting ground already covered, without resolving it or reaching a decision.",
+    stuck_framing:
+      "Turns revisit the same issue in different words. Progress is blocked by how the problem is framed, not by missing effort.",
+    early: "Too few turns, or too little substance, to judge progress.",
+  },
+};
+
 const REQUESTS = {
   "udp-db-uses": "UDP datagrams and what they can meaningfully be used for, like in databases?",
   "moq-basis": "UDP is just used as a basis for protocols like MOQ right?",
@@ -592,6 +609,7 @@ try {
     await runPhase("v1 (shipped wording)", NEXT_PHASE_QUESTION, TRAJECTORY_QUESTION, true);
     await runPhase("v2 (separated bases, no ready)", NEXT_PHASE_QUESTION_V2, TRAJECTORY_QUESTION_V2, false);
     await runPhase("v3 (separated bases + ready)", NEXT_PHASE_QUESTION_V2, TRAJECTORY_QUESTION_V2, true);
+    await runPhase("v4 (tightened stuck_detail)", NEXT_PHASE_QUESTION_V2, TRAJECTORY_QUESTION_V3, false);
   } else if (sessionOnly) {
     await runSession("CURRENT main questions", DECOMPOSITION_QUESTION_CURRENT);
     await runSession("PROPOSED questions", DECOMPOSITION_QUESTION);

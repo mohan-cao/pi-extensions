@@ -8,7 +8,8 @@ export {
 } from "./classify.js";
 export { verifyResponse, formatVerifyStatus } from "./verify.js";
 export type { VerifyFlag, VerifyResult } from "./verify.js";
-export { judgePhase, phaseRecommendation, formatPhaseNudge, formatCoaching } from "./phase.js";
+export { judgePhase, phaseRecommendation, formatPhaseNudge } from "./phase.js";
+export { judgeTrajectory, formatCoaching } from "./trajectory.js";
 export { policyFor, premisePolicyFor } from "./policies.js";
 export { TtlCache } from "./cache.js";
 export {
@@ -42,4 +43,6 @@ export type {
   ResponseMode,
   RouterConfig,
   Trajectory,
+  TrajectoryConfig,
+  TrajectoryJudgment,
 } from "./types.js";
