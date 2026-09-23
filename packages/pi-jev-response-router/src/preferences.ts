@@ -3,15 +3,15 @@ import { dirname, join } from "node:path";
 
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
-import { FOOTER_MODES, type FooterMode } from "@mohan-cao/jev-classifier";
+import { FOOTER_MODES, PHASES, type FooterMode, type Phase } from "@mohan-cao/jev-classifier";
 
 /**
  * Runtime toggles that survive `/reload` and new sessions.
  *
  * Pi's storage guidance puts state living outside one session in external
  * storage, and there is no settings API for extensions, so the extension owns
- * a small JSON file under the agent config directory. Only runtime toggles
- * live here — endpoint, model, thresholds, and routes stay in env/config.
+ * a small JSON file under the agent config directory. Runtime toggles and phase
+ * routes live here; endpoint, model, and thresholds stay in env/config.
  */
 export interface Preferences {
   enabled?: boolean;
@@ -21,6 +21,12 @@ export interface Preferences {
   coaching?: boolean;
   log?: boolean;
   footer?: FooterMode;
+  /**
+   * Phase → model id, chosen with `/jev-router route`. A preference overrides
+   * the matching `PI_JEV_PHASE_*_MODEL` variable; an empty string clears a route
+   * the environment would otherwise set.
+   */
+  routes?: Partial<Record<Phase, string>>;
 }
 
 const FILE_NAME = "pi-jev-response-router.json";
@@ -32,6 +38,19 @@ export function preferencesPath(): string {
 
 function isFooterMode(value: unknown): value is FooterMode {
   return typeof value === "string" && (FOOTER_MODES as readonly string[]).includes(value);
+}
+
+/** Known phases with string values survive; anything else is dropped. */
+function routesFrom(value: unknown): Partial<Record<Phase, string>> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+
+  const record = value as Record<string, unknown>;
+  const routes: Partial<Record<Phase, string>> = {};
+  for (const phase of PHASES) {
+    const model = record[phase];
+    if (typeof model === "string") routes[phase] = model;
+  }
+  return Object.keys(routes).length > 0 ? routes : undefined;
 }
 
 /** Boolean preference keys, so adding one does not add another near-identical guard. */
@@ -54,6 +73,8 @@ export function loadPreferences(): Preferences {
       if (typeof value === "boolean") preferences[key] = value;
     }
     if (isFooterMode(record.footer)) preferences.footer = record.footer;
+    const routes = routesFrom(record.routes);
+    if (routes) preferences.routes = routes;
     return preferences;
   } catch {
     return {};

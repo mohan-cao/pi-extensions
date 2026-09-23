@@ -15,6 +15,7 @@ import {
   verifyResponse,
   type ClassificationResult,
   type DecisionRecord,
+  type Phase,
   type PhaseJudgment,
   type PhaseRecommendation,
   type TrajectoryJudgment,
@@ -24,12 +25,18 @@ import {
 import {
   ROUTER_COMMAND_DESCRIPTION,
   createRouterCommandHandler,
+  type PhaseRouteInfo,
   type RouterState,
 } from "./commands.js";
 import { loadConfig, loadPhaseConfig, loadTrajectoryConfig } from "./config.js";
 import { lastExchange, recentHistory } from "./context.js";
 import { appendDecision, decisionLogPath } from "./decision-log.js";
-import { loadPreferences, preferencesPath, savePreferences } from "./preferences.js";
+import {
+  loadPreferences,
+  preferencesPath,
+  savePreferences,
+  type Preferences,
+} from "./preferences.js";
 import { JEV_PROVIDER_ID, registerJevAuthProvider } from "./provider.js";
 
 /** System-prompt section keys. Pi wraps each value in a tag of the same name. */
@@ -49,13 +56,17 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
   registerJevAuthProvider(pi);
 
   const config = loadConfig();
-  const phaseConfig = loadPhaseConfig();
   const trajectoryConfig = loadTrajectoryConfig();
   const cache = new TtlCache<ClassificationResult>(config.cacheTtlMs, config.cacheMaxEntries);
 
   // Persisted preferences win over environment-derived defaults, so a command is
   // durable while env still works as a one-shot override when no file exists.
   const stored = loadPreferences();
+
+  // Phase routes follow the same precedence, and a picker choice has to take
+  // effect without a restart — hence `let`, reloaded by `setRoute` below.
+  let routeOverrides: Partial<Record<Phase, string>> = stored.routes ?? {};
+  let phaseConfig = loadPhaseConfig(routeOverrides);
   const state: RouterState = {
     enabled: stored.enabled ?? true,
     debug: stored.debug ?? false,
@@ -76,7 +87,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
   let lastTrajectory: TrajectoryJudgment | undefined;
 
   function persist(): boolean {
-    return savePreferences({
+    const preferences: Preferences = {
       enabled: state.enabled,
       debug: state.debug,
       verify: state.verify,
@@ -84,7 +95,41 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       coaching: state.coaching,
       log: state.log,
       footer: state.footer,
-    });
+    };
+    // Omitted entirely when unset, so a file that never used routes stays clean.
+    if (Object.keys(routeOverrides).length > 0) preferences.routes = routeOverrides;
+    return savePreferences(preferences);
+  }
+
+  /**
+   * Model ids for the picker. Routes are matched on `model.id` alone — that is
+   * what `ctx.model.id` gives the reverse lookup — so ids are deduped across
+   * providers rather than offered as provider-qualified duplicates.
+   */
+  function availableModels(ctx: ExtensionContext): string[] {
+    const ids: string[] = [];
+    for (const model of ctx.modelRegistry.getAvailable()) {
+      if (!ids.includes(model.id)) ids.push(model.id);
+    }
+    return ids;
+  }
+
+  function phaseRoutes(): PhaseRouteInfo[] {
+    const routes: PhaseRouteInfo[] = [];
+    for (const phase of PHASES) {
+      const model = phaseConfig.routes[phase]?.model;
+      if (!model) continue;
+      routes.push({ phase, model, source: routeOverrides[phase] ? "preference" : "env" });
+    }
+    return routes;
+  }
+
+  /** An empty `model` records an explicit clear, overriding any env var. */
+  function setRoute(phase: Phase, model: string): boolean {
+    routeOverrides = { ...routeOverrides, [phase]: model };
+    const saved = persist();
+    phaseConfig = loadPhaseConfig(routeOverrides);
+    return saved;
   }
 
   async function resolveApiKey(ctx: ExtensionContext) {
@@ -108,7 +153,10 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     const authState = auth?.auth.apiKey
       ? `authenticated (${auth.source ?? "configured"})`
       : "not authenticated";
-    const routes = PHASES.filter((phase) => phaseConfig.routes[phase]);
+    // `*` marks a route chosen with /jev-router route, over an env-provided one.
+    const routes = phaseRoutes().map(
+      (route) => `${route.phase}${route.source === "preference" ? "*" : ""}`,
+    );
     ctx.ui.notify(
       [
         `Jev router: ${state.enabled ? "on" : "off"}`,
@@ -125,7 +173,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         `cache=${cache.size}/${config.cacheMaxEntries}`,
         `prefs=${preferencesPath()}`,
         `decisions=${decisionLogPath()}`,
-        `phaseRoutes=${routes.length > 0 ? routes.join(",") : "none (set PI_JEV_PHASE_*_MODEL)"}`,
+        `phaseRoutes=${routes.length > 0 ? routes.join(",") : "none — set one with /jev-router route"}`,
         `currentModel=${ctx.model?.id ?? "unknown"}`,
         `lastPhase=${describeLastPhase()}`,
         `lastTrajectory=${describeLastTrajectory()}`,
@@ -278,6 +326,9 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       },
       classify: runClassify,
       reportStatus,
+      phaseRoutes,
+      availableModels,
+      setRoute,
     }),
   });
 

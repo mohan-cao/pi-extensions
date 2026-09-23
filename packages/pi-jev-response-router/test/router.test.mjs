@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { loadPhaseConfig } from "../dist/config.js";
 import { appendDecision, decisionLogPath } from "../dist/decision-log.js";
 import piJevResponseRouter from "../dist/index.js";
 import { loadPreferences, preferencesPath, savePreferences } from "../dist/preferences.js";
@@ -84,6 +85,140 @@ test("decision log appends one JSON line per record", () => {
     assert.equal(JSON.parse(lines[0]).recommendedModel, "model-b");
     assert.equal(JSON.parse(lines[1]).mode, "normal");
   });
+});
+
+const PHASE_ENV_NAMES = [
+  "PI_JEV_PHASE_BUILD_MODEL",
+  "PI_JEV_PHASE_DESIGN_MODEL",
+  "PI_JEV_PHASE_GENERAL_MODEL",
+];
+
+function withPhaseEnv(values, run) {
+  const previous = PHASE_ENV_NAMES.map((name) => process.env[name]);
+  for (const name of PHASE_ENV_NAMES) delete process.env[name];
+  for (const [name, value] of Object.entries(values)) process.env[name] = value;
+
+  try {
+    return run();
+  } finally {
+    PHASE_ENV_NAMES.forEach((name, index) => {
+      const value = previous[index];
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    });
+  }
+}
+
+test("phase routes prefer a preference over the environment", () => {
+  withPhaseEnv({ PI_JEV_PHASE_BUILD_MODEL: "from-env", PI_JEV_PHASE_DESIGN_MODEL: "env" }, () => {
+    assert.equal(loadPhaseConfig().routes.build.model, "from-env");
+    // A preference wins over the variable...
+    assert.equal(loadPhaseConfig({ build: "from-prefs" }).routes.build.model, "from-prefs");
+    // ...and an empty string is an explicit clear, not "fall through to env".
+    assert.equal(loadPhaseConfig({ build: "" }).routes.build, undefined);
+    // Untouched phases still fall through.
+    assert.equal(loadPhaseConfig({ build: "from-prefs" }).routes.design.model, "env");
+    assert.equal(loadPhaseConfig().routes.general, undefined);
+  });
+});
+
+test("preferences keep valid phase routes and drop the rest", () => {
+  withAgentDir(() => {
+    assert.equal(savePreferences({ routes: { build: "model-b", design: "" } }), true);
+    assert.deepEqual(loadPreferences().routes, { build: "model-b", design: "" });
+
+    writeFileSync(
+      preferencesPath(),
+      JSON.stringify({ routes: { build: "ok", bogus: "x", design: 7 } }),
+    );
+    assert.deepEqual(loadPreferences().routes, { build: "ok" });
+  });
+});
+
+test("jev-router route sets, lists, picks, and clears phase routes", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "jev-route-"));
+  const previousDir = process.env.PI_CODING_AGENT_DIR;
+  const previousEnv = PHASE_ENV_NAMES.map((name) => process.env[name]);
+  process.env.PI_CODING_AGENT_DIR = dir;
+  for (const name of PHASE_ENV_NAMES) delete process.env[name];
+
+  try {
+    const pi = {
+      commands: new Map(),
+      registerCommand(name, options) {
+        this.commands.set(name, options);
+      },
+      registerProvider() {},
+      on() {
+        return () => {};
+      },
+    };
+    piJevResponseRouter(pi);
+    const handler = pi.commands.get("jev-router").handler;
+
+    const notifications = [];
+    let picker;
+    const ctx = {
+      ui: {
+        notify: (message, type) => notifications.push({ message, type }),
+        setStatus: () => {},
+        select: async (title, options) => {
+          picker = { title, options };
+          return options[0];
+        },
+      },
+      hasUI: true,
+      modelRegistry: {
+        getProviderAuth: async () => ({ auth: { apiKey: "test-key" } }),
+        getAvailable: () => [
+          { id: "model-a", provider: "p1" },
+          { id: "model-b", provider: "p1" },
+          { id: "model-a", provider: "p2" },
+        ],
+      },
+      signal: undefined,
+    };
+    const last = () => notifications.at(-1)?.message ?? "";
+
+    await handler("route", ctx);
+    assert.match(last(), /Jev phase routes:/);
+    assert.match(last(), /build: unset/);
+
+    await handler("route build model-b", ctx);
+    assert.match(last(), /Jev build route set to model-b/);
+    assert.equal(loadPreferences().routes.build, "model-b");
+
+    // Persisted, and now reported as coming from the preferences file.
+    await handler("route", ctx);
+    assert.match(last(), /build: model-b \(preference\)/);
+
+    // Without a model id the picker opens, deduped by id, with a clear entry.
+    await handler("route design", ctx);
+    assert.equal(picker.title, "Model for the design phase");
+    assert.deepEqual(picker.options.slice(0, 2), ["model-a", "model-b"]);
+    assert.match(picker.options.at(-1), /clear/);
+    assert.equal(loadPreferences().routes.design, "model-a");
+
+    await handler("route nope model-x", ctx);
+    assert.match(last(), /Unknown phase "nope"/);
+
+    await handler("route build clear", ctx);
+    assert.match(last(), /Jev build route cleared/);
+    assert.equal(loadPreferences().routes.build, "");
+
+    // A cleared route is gone from the listing, not reported as a model.
+    await handler("route", ctx);
+    assert.match(last(), /build: unset/);
+  } finally {
+    if (previousDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previousDir;
+    PHASE_ENV_NAMES.forEach((name, index) => {
+      const value = previousEnv[index];
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    });
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("jev-router dispatches commands by verb", async () => {

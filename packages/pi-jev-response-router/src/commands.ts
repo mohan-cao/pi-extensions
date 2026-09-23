@@ -1,6 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import { FOOTER_MODES, type FooterMode } from "@mohan-cao/jev-classifier";
+import { FOOTER_MODES, PHASES, type FooterMode, type Phase } from "@mohan-cao/jev-classifier";
 
 /** Mutable router state, shared with the hooks. */
 export interface RouterState {
@@ -22,6 +22,18 @@ export interface RouterCommandDeps {
   clearStatuses(ctx: ExtensionContext): void;
   classify(prompt: string, ctx: ExtensionContext): Promise<void>;
   reportStatus(ctx: ExtensionContext): Promise<void>;
+  /** Effective phase routes, and whether each came from preferences or the environment. */
+  phaseRoutes(): PhaseRouteInfo[];
+  /** Model ids the picker offers, deduped. */
+  availableModels(ctx: ExtensionContext): string[];
+  /** Persist a phase route (`""` clears it) and reload the phase config. */
+  setRoute(phase: Phase, model: string): boolean;
+}
+
+export interface PhaseRouteInfo {
+  phase: Phase;
+  model: string;
+  source: "preference" | "env";
 }
 
 interface RouterCommand {
@@ -68,6 +80,69 @@ const statusCommand: RouterCommand = {
   description: "show state, config, and the last judgments",
   run: (deps, _rest, ctx) => deps.reportStatus(ctx),
 };
+
+function isPhase(value: string): value is Phase {
+  return (PHASES as readonly string[]).includes(value);
+}
+
+/** Tokens meaning "remove this route", so clearing needs no picker. */
+const CLEAR_TOKENS = new Set(["clear", "off", "none", "unset"]);
+
+/** Picker entry for clearing: a sentinel, so it cannot collide with a model id. */
+const PICKER_CLEAR = "— clear —";
+
+function describeRoutes(deps: RouterCommandDeps): string {
+  const routes = deps.phaseRoutes();
+  const lines = PHASES.map((phase) => {
+    const route = routes.find((candidate) => candidate.phase === phase);
+    return route ? `  ${phase}: ${route.model} (${route.source})` : `  ${phase}: unset`;
+  });
+  return `Jev phase routes:\n${lines.join("\n")}`;
+}
+
+/**
+ * With a model id this is a plain setter; without one it opens the model picker,
+ * so choosing a route does not mean knowing model ids by heart.
+ */
+async function chooseRoute(
+  deps: RouterCommandDeps,
+  rest: string,
+  ctx: ExtensionContext,
+): Promise<void> {
+  const [phase, ...modelParts] = rest.split(/\s+/).filter(Boolean);
+  if (!phase) {
+    ctx.ui.notify(
+      `${describeRoutes(deps)}\nPick one with /jev-router route <${PHASES.join("|")}>.`,
+      "info",
+    );
+    return;
+  }
+  if (!isPhase(phase)) {
+    ctx.ui.notify(`Unknown phase "${phase}". Use: ${PHASES.join(", ")}.`, "warning");
+    return;
+  }
+
+  let model = modelParts.join(" ");
+  if (!model) {
+    const models = deps.availableModels(ctx);
+    if (!ctx.hasUI || models.length === 0) {
+      ctx.ui.notify(`Usage: /jev-router route ${phase} <model-id>`, "warning");
+      return;
+    }
+    const choice = await ctx.ui.select(`Model for the ${phase} phase`, [...models, PICKER_CLEAR]);
+    // Cancelling leaves the route alone rather than clearing it.
+    if (choice === undefined) return;
+    model = choice === PICKER_CLEAR ? "" : choice;
+  }
+
+  const next = model === "" || CLEAR_TOKENS.has(model.toLowerCase()) ? "" : model;
+  const saved = deps.setRoute(phase, next);
+  const outcome = next ? `set to ${next}` : "cleared";
+  ctx.ui.notify(
+    `Jev ${phase} route ${outcome}${saved ? "" : " (could not write preferences)"}`,
+    saved ? "info" : "warning",
+  );
+}
 
 const helpCommand: RouterCommand = {
   usage: "help",
@@ -158,6 +233,14 @@ const COMMANDS = new Map<string, RouterCommand>([
         deps.persist();
         ctx.ui.notify(`Jev footer mode: ${deps.state.footer}`, "info");
       },
+    },
+  ],
+  [
+    "route",
+    {
+      usage: "route <phase> [model]",
+      description: "pick the model for a phase, from the available models",
+      run: chooseRoute,
     },
   ],
   [
