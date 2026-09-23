@@ -61,6 +61,29 @@ The footer preference selects the rendering: `compact` (icon + label, default),
 This is **verify-only**: it never retries or rewrites the answer. Retry is
 deliberately out of scope for now.
 
+### Phase recommendation (shadow)
+
+When routes are configured, a post-generation judgment reports what phase the work is moving
+into, and whether the conversation is stuck. The footer nudges only when the running model is
+known to serve a different phase:
+
+- `↪ build · <model>` — the work moved; switch when you want to
+- `♾️ paralysis` — analysis paralysis; consider zooming out
+- `🖼️ framing` — the framing is the blocker, not the effort
+
+It **never switches models and never blocks a prompt**. Switch with `/model`; the nudge clears
+itself once you do. Without routes configured the feature is inert.
+
+| Environment variable | Default | Meaning |
+| --- | --- | --- |
+| `PI_JEV_PHASE_BUILD_MODEL` | unset | Model that serves the `build` phase |
+| `PI_JEV_PHASE_DESIGN_MODEL` | unset | Model that serves the `design` phase |
+| `PI_JEV_PHASE_GENERAL_MODEL` | unset | Model that serves the `general` phase |
+| `PI_JEV_PHASE_CONFIDENCE_THRESHOLD` | `0.7` | Minimum Choice confidence before a routing nudge |
+| `PI_JEV_PHASE_READY_THRESHOLD` | `0.5` | P(implementation ready) needed to corroborate `design → build` |
+| `PI_JEV_TRAJECTORY_THRESHOLD` | `0.7` | Minimum confidence before a stuck-pattern hint |
+| `PI_JEV_PHASE_HISTORY_TURNS` | `8` | Conversation turns supplied to the phase judge |
+
 ### Install from npm
 
 ```bash
@@ -81,6 +104,8 @@ You can also provide `TYPESAFE_API_KEY` in the environment. An explicitly stored
 /jev-router off
 /jev-router verify on
 /jev-router verify off
+/jev-router phase on
+/jev-router phase off
 /jev-router debug on
 /jev-router debug off
 /jev-router footer compact

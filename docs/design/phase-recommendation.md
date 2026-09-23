@@ -1,7 +1,8 @@
 # Shadow phase recommendation
 
-**Status:** design, not implemented. Depends on PR3 (`feat/verify-signal`) merging and on
-the core/harness package split landing first.
+**Status:** implemented on `feat/footer-signals` — questions, judgment, deterministic
+comparison, and Pi footer wiring. Thresholds are calibrated against the transition eval set in
+`scripts/jev-eval.mjs` (`--phase-only`).
 
 **Supersedes:** the earlier "next model recommendation" draft. That draft proposed a
 pre-generation gate, an auto-switch command, and a `stay` value emitted by Jev. All three
@@ -381,12 +382,23 @@ a coin flip).
 1. **Log `workPhase`, `confidence`, `implementation_ready`, and `modelPhase` per turn** to
    the same decision log used for the quality judge. This is the artifact that tunes the
    display threshold *and* answers whether the feature is useful at all.
-2. **Build a transition eval set** — pairs of exchanges: design-then-settle,
-   implement-then-discover-ambiguity, mixed-work-stays-general, and genuine non-transitions
-   that must *not* fire. Extend `scripts/jev-eval.mjs`.
+2. ~~**Build a transition eval set**~~ Done — eight cases in `scripts/jev-eval.mjs`
+   (`--phase-only`): design-settled, design-open, build-ambiguity, build-progress,
+   detail-spiral, framing-loop, general-chat, early.
 3. **Success criterion:** the disagreement signal correlates with something the user cares
    about (wasted spend, wrong-model work). If it only correlates with model verbosity, the
    feature is not worth shipping.
+
+### Measured
+
+| signal | result |
+| --- | --- |
+| `next_phase` | correct on all eight cases (design-settled → build 1.00, build-ambiguity → design 1.00, general-chat → general 1.00) |
+| `implementation_ready` | bimodal — 0.91–0.93 when ready, ≤ 0.09 otherwise, so the 0.5 gate is unambiguous |
+| `trajectory` | one false positive: a design conversation with open questions reads `stuck_detail`, at confidence 0.45–0.47 versus 0.98–1.00 for the two genuine stuck cases — hence the 0.7 gate |
+
+The routing side needed no tuning. The coaching side needed the confidence gate, and the
+measured gap is wide enough that it is not a close call.
 
 ## Dependencies and sequencing
 

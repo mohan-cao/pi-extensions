@@ -1,4 +1,5 @@
 import {
+  type JevChoiceAnswer,
   type JevNoulAnswer,
   type JevScoreAnswer,
   type JevSystemOneResponse,
@@ -157,4 +158,38 @@ export function parseScoreAnswer(payload: JevSystemOneResponse, id: string): Sco
     throw new JevError(`Jev score answer ${id} is missing probabilities`);
   }
   return { score: answer.score, probabilities: answer.probabilities };
+}
+
+export interface ChoiceValue<T extends string = string> {
+  choice: T;
+  confidence: number;
+  probabilities: Record<string, number>;
+}
+
+export function parseChoiceAnswer<T extends string>(
+  payload: JevSystemOneResponse,
+  id: string,
+  allowed: readonly T[],
+): ChoiceValue<T> {
+  const raw = payload.answers?.[id];
+  if (!raw || typeof raw !== "object") {
+    throw new JevError(`Jev response is missing answers.${id}`);
+  }
+
+  const answer = raw as Partial<JevChoiceAnswer> & { type?: unknown };
+  if (answer.type !== "choice") {
+    throw new JevError(`Expected a choice answer for ${id}, got ${String(answer.type)}`);
+  }
+  if (typeof answer.choice !== "string" || !(allowed as readonly string[]).includes(answer.choice)) {
+    throw new JevError(`Unexpected ${id} choice: ${String(answer.choice)}`);
+  }
+  if (typeof answer.confidence !== "number" || !Number.isFinite(answer.confidence)) {
+    throw new JevError(`Jev choice answer ${id} is missing a numeric confidence`);
+  }
+
+  return {
+    choice: answer.choice as T,
+    confidence: clamp01(answer.confidence),
+    probabilities: answer.probabilities ?? {},
+  };
 }
