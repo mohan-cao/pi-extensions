@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import {
-  FOOTER_MODES,
+  PHASES,
   TtlCache,
   classifyWithJev,
   formatCoaching,
@@ -13,9 +13,15 @@ import {
   premisePolicyFor,
   verifyResponse,
   type ClassificationResult,
-  type FooterMode,
+  type PhaseJudgment,
+  type PhaseRecommendation,
 } from "@mohan-cao/jev-classifier";
 
+import {
+  ROUTER_COMMAND_DESCRIPTION,
+  createRouterCommandHandler,
+  type RouterState,
+} from "./commands.js";
 import { loadConfig, loadPhaseConfig } from "./config.js";
 import { lastExchange, recentHistory } from "./context.js";
 import { loadPreferences, preferencesPath, savePreferences } from "./preferences.js";
@@ -44,14 +50,26 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
   // Persisted preferences win over environment-derived defaults, so a command is
   // durable while env still works as a one-shot override when no file exists.
   const stored = loadPreferences();
-  let enabled = stored.enabled ?? true;
-  let debug = stored.debug ?? false;
-  let verifyEnabled = stored.verify ?? config.verify;
-  let phaseEnabled = stored.phase ?? true;
-  let footer: FooterMode = stored.footer ?? "compact";
+  const state: RouterState = {
+    enabled: stored.enabled ?? true,
+    debug: stored.debug ?? false,
+    verify: stored.verify ?? config.verify,
+    phase: stored.phase ?? true,
+    footer: stored.footer ?? "compact",
+  };
+
+  // Kept for the status readout, so "why is nothing showing?" is answerable.
+  let lastJudgment: PhaseJudgment | undefined;
+  let lastRecommendation: PhaseRecommendation | undefined;
 
   function persist(): boolean {
-    return savePreferences({ enabled, debug, verify: verifyEnabled, phase: phaseEnabled, footer });
+    return savePreferences({
+      enabled: state.enabled,
+      debug: state.debug,
+      verify: state.verify,
+      phase: state.phase,
+      footer: state.footer,
+    });
   }
 
   async function resolveApiKey(ctx: ExtensionContext) {
@@ -59,70 +77,12 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     return auth?.auth.apiKey;
   }
 
-  function booleanToggle(value: string): boolean | undefined {
-    if (value === "on") return true;
-    if (value === "off") return false;
-    return undefined;
-  }
-
-  function setEnabled(value: boolean, ctx: ExtensionContext): void {
-    enabled = value;
-    persist();
-    if (!enabled) ctx.ui.setStatus(VERIFY_STATUS_KEY, undefined);
-    ctx.ui.notify(`Jev response router ${enabled ? "enabled" : "disabled"}`, "info");
-  }
-
-  function setDebug(rest: string, ctx: ExtensionContext): void {
-    const next = booleanToggle(rest);
-    if (next === undefined) {
-      ctx.ui.notify("Usage: /jev-router debug on|off", "warning");
-      return;
-    }
-    debug = next;
-    persist();
-    ctx.ui.notify(`Jev response router debug notifications ${next ? "enabled" : "disabled"}`, "info");
-  }
-
-  function setVerify(rest: string, ctx: ExtensionContext): void {
-    const next = booleanToggle(rest);
-    if (next === undefined) {
-      ctx.ui.notify("Usage: /jev-router verify on|off", "warning");
-      return;
-    }
-    verifyEnabled = next;
-    persist();
-    if (!verifyEnabled) ctx.ui.setStatus(VERIFY_STATUS_KEY, undefined);
-    ctx.ui.notify(`Jev post-generation verification ${next ? "enabled" : "disabled"}`, "info");
-  }
-
-  function setPhase(rest: string, ctx: ExtensionContext): void {
-    const next = booleanToggle(rest);
-    if (next === undefined) {
-      ctx.ui.notify("Usage: /jev-router phase on|off", "warning");
-      return;
-    }
-    phaseEnabled = next;
-    persist();
-    if (!phaseEnabled) {
-      ctx.ui.setStatus(PHASE_STATUS_KEY, undefined);
-      ctx.ui.setStatus(COACHING_STATUS_KEY, undefined);
-    }
-    ctx.ui.notify(`Jev phase recommendation ${next ? "enabled" : "disabled"}`, "info");
-  }
-
-  function setFooter(rest: string, ctx: ExtensionContext): void {
-    if (!(FOOTER_MODES as readonly string[]).includes(rest)) {
-      ctx.ui.notify(`Unknown footer mode "${rest}". Use: ${FOOTER_MODES.join(", ")}.`, "warning");
-      return;
-    }
-    footer = rest as FooterMode;
-    persist();
-    ctx.ui.notify(`Jev footer mode: ${footer}`, "info");
-  }
-
-  function clearCache(ctx: ExtensionContext): void {
-    cache.clear();
-    ctx.ui.notify("Jev classification cache cleared", "info");
+  function describeLastJudgment(): string {
+    if (!lastJudgment) return "none yet";
+    const { phase, phaseConfidence, implementationReady, trajectory, trajectoryConfidence } =
+      lastJudgment;
+    const nudge = lastRecommendation ? "" : " (no nudge)";
+    return `${phase}@${phaseConfidence.toFixed(2)} ready=${implementationReady.toFixed(2)} ${trajectory}@${trajectoryConfidence.toFixed(2)}${nudge}`;
   }
 
   async function reportStatus(ctx: ExtensionContext): Promise<void> {
@@ -130,19 +90,23 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     const authState = auth?.auth.apiKey
       ? `authenticated (${auth.source ?? "configured"})`
       : "not authenticated";
+    const routes = PHASES.filter((phase) => phaseConfig.routes[phase]);
     ctx.ui.notify(
       [
-        `Jev router: ${enabled ? "on" : "off"}`,
-        `verify=${verifyEnabled ? "on" : "off"}`,
-        `phase=${phaseEnabled ? "on" : "off"}`,
-        `debug=${debug ? "on" : "off"}`,
-        `footer=${footer}`,
+        `Jev router: ${state.enabled ? "on" : "off"}`,
+        `verify=${state.verify ? "on" : "off"}`,
+        `phase=${state.phase ? "on" : "off"}`,
+        `debug=${state.debug ? "on" : "off"}`,
+        `footer=${state.footer}`,
         authState,
         `model=${config.model}`,
         `thresholds: decomp>=${config.decompositionThreshold}, bounded>=${config.boundedVerificationThreshold}`,
         `history=${config.historyTurns} turns`,
         `cache=${cache.size}/${config.cacheMaxEntries}`,
         `prefs=${preferencesPath()}`,
+        `phaseRoutes=${routes.length > 0 ? routes.join(",") : "none (set PI_JEV_PHASE_*_MODEL)"}`,
+        `currentModel=${ctx.model?.id ?? "unknown"}`,
+        `lastPhase=${describeLastJudgment()}`,
       ].join("; "),
       "info",
     );
@@ -182,9 +146,9 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         ctx.signal,
       );
 
-      ctx.ui.setStatus(VERIFY_STATUS_KEY, formatVerifyStatus(result, footer));
+      ctx.ui.setStatus(VERIFY_STATUS_KEY, formatVerifyStatus(result, state.footer));
 
-      if (debug) {
+      if (state.debug) {
         ctx.ui.notify(
           `Jev verify: ${result.flag} (answers=${result.answersQuestion.toFixed(2)}, evasive=${result.evasive.toFixed(2)}, obligation=${result.obligationUnmet.toFixed(2)})`,
           "info",
@@ -192,7 +156,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       }
     } catch (error) {
       // Verification is advisory; never let it affect the run.
-      if (debug) {
+      if (state.debug) {
         ctx.ui.notify(
           `Jev verify failed open: ${error instanceof Error ? error.message : String(error)}`,
           "warning",
@@ -208,14 +172,16 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     try {
       const judgment = await judgePhase(turns, apiKey, config, ctx.signal);
       const recommendation = phaseRecommendation(judgment, ctx.model?.id, phaseConfig);
+      lastJudgment = judgment;
+      lastRecommendation = recommendation;
 
-      ctx.ui.setStatus(PHASE_STATUS_KEY, formatPhaseNudge(recommendation, footer));
+      ctx.ui.setStatus(PHASE_STATUS_KEY, formatPhaseNudge(recommendation, state.footer));
       ctx.ui.setStatus(
         COACHING_STATUS_KEY,
-        formatCoaching(judgment, footer, phaseConfig.trajectoryConfidenceThreshold),
+        formatCoaching(judgment, state.footer, phaseConfig.trajectoryConfidenceThreshold),
       );
 
-      if (debug) {
+      if (state.debug) {
         ctx.ui.notify(
           `Jev phase: ${judgment.phase} (conf=${judgment.phaseConfidence.toFixed(2)}, ready=${judgment.implementationReady.toFixed(2)}, trajectory=${judgment.trajectory}@${judgment.trajectoryConfidence.toFixed(2)})`,
           "info",
@@ -223,7 +189,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       }
     } catch (error) {
       // Phase judgment is advisory; never let it affect the run.
-      if (debug) {
+      if (state.debug) {
         ctx.ui.notify(
           `Jev phase failed open: ${error instanceof Error ? error.message : String(error)}`,
           "warning",
@@ -232,39 +198,20 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     }
   }
 
-  type Command = (rest: string, ctx: ExtensionContext) => void | Promise<void>;
-
-  const reportStatusCommand: Command = (_rest, ctx) => reportStatus(ctx);
-
-  const commands = new Map<string, Command>([
-    ["on", (_rest, ctx) => setEnabled(true, ctx)],
-    ["off", (_rest, ctx) => setEnabled(false, ctx)],
-    ["debug", setDebug],
-    ["verify", setVerify],
-    ["phase", setPhase],
-    ["footer", setFooter],
-    ["clear-cache", (_rest, ctx) => clearCache(ctx)],
-    [
-      "classify",
-      (rest, ctx) => {
-        if (!rest) {
-          ctx.ui.notify("Usage: /jev-router classify <text>", "warning");
-          return;
-        }
-        return runClassify(rest, ctx);
-      },
-    ],
-    ["status", reportStatusCommand],
-  ]);
-
   pi.registerCommand("jev-router", {
-    description:
-      "Control/test the Jev response router: status | on | off | debug on|off | verify on|off | phase on|off | footer compact|icons|off | clear-cache | classify <text>",
-    handler: async (rawArgs, ctx) => {
-      const [verb = "", ...rest] = rawArgs.trim().split(/\s+/);
-      const command = commands.get(verb) ?? reportStatusCommand;
-      await command(rest.join(" "), ctx);
-    },
+    description: ROUTER_COMMAND_DESCRIPTION,
+    handler: createRouterCommandHandler({
+      state,
+      persist,
+      clearCache: () => cache.clear(),
+      clearStatuses: (ctx) => {
+        ctx.ui.setStatus(VERIFY_STATUS_KEY, undefined);
+        ctx.ui.setStatus(PHASE_STATUS_KEY, undefined);
+        ctx.ui.setStatus(COACHING_STATUS_KEY, undefined);
+      },
+      classify: runClassify,
+      reportStatus,
+    }),
   });
 
   pi.on("before_agent_start", async (event, ctx) => {
@@ -278,11 +225,11 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     delete event.systemPromptOptions.sections[POLICY_SECTION];
     delete event.systemPromptOptions.sections[PREMISE_SECTION];
 
-    if (!enabled || !event.prompt.trim()) return;
+    if (!state.enabled || !event.prompt.trim()) return;
 
     const apiKey = await resolveApiKey(ctx);
     if (!apiKey) {
-      if (debug) {
+      if (state.debug) {
         ctx.ui.notify(
           "Jev router skipped: not authenticated. Run /login and select TypeSafe Jev (response router).",
           "warning",
@@ -303,7 +250,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         cache.set(cacheKey, decision);
       }
 
-      if (debug) {
+      if (state.debug) {
         ctx.ui.notify(`Jev route: ${formatDecision(decision)}`, "info");
       }
 
@@ -327,7 +274,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       return;
     } catch (error) {
       // Fail open: a classifier outage should not prevent Pi from answering.
-      if (debug) {
+      if (state.debug) {
         ctx.ui.notify(
           `Jev router failed open: ${error instanceof Error ? error.message : String(error)}`,
           "warning",
@@ -338,7 +285,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
   });
 
   pi.on("agent_settled", async (_event, ctx) => {
-    if (!enabled) return;
+    if (!state.enabled) return;
     // Both judgments only produce status indicators, so skip the Jev calls
     // entirely when there is nowhere to render them (e.g. -p / json mode).
     if (!ctx.hasUI) return;
@@ -346,11 +293,11 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     const apiKey = await resolveApiKey(ctx);
     if (!apiKey) return;
 
-    if (verifyEnabled) {
+    if (state.verify) {
       await runVerification(apiKey, ctx);
     }
 
-    if (phaseEnabled && Object.keys(phaseConfig.routes).length > 0) {
+    if (state.phase) {
       await runPhaseJudgment(apiKey, ctx);
     }
   });

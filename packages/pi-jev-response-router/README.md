@@ -99,6 +99,7 @@ You can also provide `TYPESAFE_API_KEY` in the environment. An explicitly stored
 ### Commands
 
 ```text
+/jev-router help
 /jev-router status
 /jev-router on
 /jev-router off

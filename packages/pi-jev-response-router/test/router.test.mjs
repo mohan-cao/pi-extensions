@@ -123,6 +123,10 @@ test("jev-router dispatches commands by verb", async () => {
 
     await handler("classify", ctx);
     assert.match(last(), /Usage: \/jev-router classify/);
+
+    await handler("help", ctx);
+    assert.match(last(), /\/jev-router status/);
+    assert.match(last(), /\/jev-router footer compact\|icons\|off/);
   } finally {
     if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
     else process.env.PI_CODING_AGENT_DIR = previous;
