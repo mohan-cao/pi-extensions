@@ -1,9 +1,9 @@
-import { callSystemOne, parseNoulAnswer, parseScoreAnswer } from "./jev-client.js";
+import { callSystemOne, parseNoulAnswer, parseScoreAnswer } from "./client.js";
 import {
   VERIFY_ANSWER_QUESTION,
   VERIFY_EVASIVE_QUESTION,
   VERIFY_OBLIGATION_QUESTION,
-} from "./prompt.js";
+} from "./questions.js";
 import type { FooterMode, RouterConfig } from "./types.js";
 
 const ANSWER_ID = "answers_question";

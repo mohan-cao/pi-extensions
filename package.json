@@ -21,6 +21,7 @@
   "devDependencies": {
     "@earendil-works/pi-ai": "0.86.0",
     "@earendil-works/pi-coding-agent": "0.86.0",
+    "@mohan-cao/jev-classifier": "workspace:^",
     "typescript": "5.8.3",
     "@types/node": "^22.0.0"
   }

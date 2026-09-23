@@ -1,4 +1,4 @@
-import type { RouterConfig } from "./types.js";
+import type { RouterConfig } from "@mohan-cao/jev-classifier";
 
 function numberFromEnv(name: string, fallback: number): number {
   const value = process.env[name];

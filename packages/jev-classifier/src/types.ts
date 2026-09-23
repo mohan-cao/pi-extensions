@@ -53,6 +53,19 @@ export interface RouterConfig {
   verifyObligationThreshold: number;
 }
 
+/** The Jev `state` payload for classification. */
+export interface ClassificationState {
+  user_request: string;
+  /** Prior turns, flattened as `"role: text"`. Omitted when there is no history. */
+  recent_conversation?: string[];
+}
+
+/** A prior conversation turn included in the classifier state. */
+export interface HistoryTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+
 export interface JevNoulAnswer {
   type: "noul";
   noul: number;

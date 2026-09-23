@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
-import { FOOTER_MODES, type FooterMode } from "./types.js";
+import { FOOTER_MODES, type FooterMode } from "@mohan-cao/jev-classifier";
 
 /**
  * Runtime toggles that survive `/reload` and new sessions.

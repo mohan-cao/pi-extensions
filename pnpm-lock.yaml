@@ -14,12 +14,17 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: 0.86.0
         version: 0.86.0(ws@8.21.3)
+      '@mohan-cao/jev-classifier':
+        specifier: workspace:^
+        version: link:packages/jev-classifier
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.4
       typescript:
         specifier: 5.8.3
         version: 5.8.3
+
+  packages/jev-classifier: {}
 
   packages/pi-jev-response-router:
     dependencies:
@@ -29,6 +34,9 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: '*'
         version: 0.86.0(ws@8.21.3)
+      '@mohan-cao/jev-classifier':
+        specifier: workspace:^
+        version: link:../jev-classifier
 
 packages:
 

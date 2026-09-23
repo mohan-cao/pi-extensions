@@ -1,23 +1,9 @@
-import { buildState, type HistoryTurn } from "./context.js";
 import {
-  BOUNDED_VERIFICATION_QUESTION,
-  DECOMPOSITION_QUESTION,
-  PREMISE_DEFECT_QUESTION,
-  type NoulQuestionSpec,
-  type ScoreQuestionSpec,
-} from "./prompt.js";
-import {
-  type ClassificationResult,
   type JevNoulAnswer,
   type JevScoreAnswer,
   type JevSystemOneResponse,
-  type ResponseMode,
   type RouterConfig,
 } from "./types.js";
-
-const DECOMPOSITION_ID = "requires_decomposition";
-const BOUNDED_ID = "bounded_verification";
-const PREMISE_ID = "premise_defect";
 
 export class JevError extends Error {
   constructor(
@@ -91,6 +77,9 @@ export async function callSystemOne(
     let response: Response;
 
     try {
+      // Operator-configured endpoint (PI_JEV_ENDPOINT), never derived from
+      // request data — not an SSRF sink.
+      // pi-lens-ignore: ts_ssrf_sink
       response = await fetch(config.endpoint, {
         method: "POST",
         headers: {
@@ -124,7 +113,7 @@ export async function callSystemOne(
   throw new JevError("Jev request failed after retries");
 }
 
-function clamp01(value: number): number {
+export function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
@@ -168,71 +157,4 @@ export function parseScoreAnswer(payload: JevSystemOneResponse, id: string): Sco
     throw new JevError(`Jev score answer ${id} is missing probabilities`);
   }
   return { score: answer.score, probabilities: answer.probabilities };
-}
-
-/** Decomposition takes precedence; `normal` is the residual, never a competitor. */
-export function composeMode(
-  signals: ClassificationResult["signals"],
-  config: Pick<RouterConfig, "decompositionThreshold" | "boundedVerificationThreshold">,
-): ResponseMode {
-  if (signals.decomposition >= config.decompositionThreshold) return "decomposition_required";
-  if (signals.boundedVerification >= config.boundedVerificationThreshold) {
-    return "bounded_verification";
-  }
-  return "normal";
-}
-
-export function parseClassificationResponse(
-  payload: JevSystemOneResponse,
-  config: Pick<RouterConfig, "decompositionThreshold" | "boundedVerificationThreshold">,
-): ClassificationResult {
-  const signals = {
-    decomposition: parseNoulAnswer(payload, DECOMPOSITION_ID),
-    boundedVerification: parseNoulAnswer(payload, BOUNDED_ID),
-    premiseDefect: parseScoreAnswer(payload, PREMISE_ID).score,
-  };
-
-  const mode = composeMode(signals, config);
-  const probabilities: Record<ResponseMode, number> = {
-    bounded_verification: signals.boundedVerification,
-    decomposition_required: signals.decomposition,
-    normal: clamp01(1 - Math.max(signals.decomposition, signals.boundedVerification)),
-  };
-
-  const confidence =
-    mode === "decomposition_required"
-      ? signals.decomposition
-      : mode === "bounded_verification"
-        ? signals.boundedVerification
-        : probabilities.normal;
-
-  return {
-    mode,
-    confidence,
-    probabilities,
-    signals,
-    ...(payload.model ? { model: payload.model } : {}),
-  };
-}
-
-export async function classifyWithJev(
-  prompt: string,
-  apiKey: string,
-  config: RouterConfig,
-  parentSignal?: AbortSignal,
-  history: HistoryTurn[] = [],
-): Promise<ClassificationResult> {
-  const payload = await callSystemOne(
-    buildState(prompt, history),
-    {
-      [DECOMPOSITION_ID]: DECOMPOSITION_QUESTION satisfies NoulQuestionSpec,
-      [BOUNDED_ID]: BOUNDED_VERIFICATION_QUESTION satisfies NoulQuestionSpec,
-      [PREMISE_ID]: PREMISE_DEFECT_QUESTION satisfies ScoreQuestionSpec,
-    },
-    apiKey,
-    config,
-    parentSignal,
-  );
-
-  return parseClassificationResponse(payload, config);
 }
