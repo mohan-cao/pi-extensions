@@ -130,6 +130,45 @@ const VERIFY_OBLIGATION_QUESTION = {
 
 // ------------------------------------------------------------------- cases
 
+const NEXT_PHASE_QUESTION = {
+  type: "choice",
+  instructions:
+    "What should the primary next activity be, given what the conversation has established and what remains open? Judge the trajectory of the work — what has been decided and what is still unresolved — not the length or style of the most recent message.",
+  criteria: {
+    build:
+      "Implementation, tests, mechanical debugging, or straightforward code changes. The decisions needed to act are already settled.",
+    design:
+      "Architecture, ambiguous requirements, nuanced tradeoffs, adversarial review, or difficult debugging. Something material is still unresolved.",
+    general:
+      "General conversation, investigation, or mixed work that neither implementation nor design specifically describes.",
+  },
+};
+
+const IMPLEMENTATION_READY_QUESTION = {
+  type: "noul",
+  instructions:
+    "Has the conversation reached the point where the primary next activity should be implementation rather than further design or discussion? Consider whether the material design decisions are settled enough to act on.",
+  criteria: {
+    true: "The open design questions are settled enough that the next useful action is writing or changing code.",
+    false: "Material design questions remain open, or the conversation is still exploratory.",
+  },
+};
+
+const TRAJECTORY_QUESTION = {
+  type: "choice",
+  instructions:
+    "How is this conversation progressing? Judge the arc across recent turns — what has been resolved and what keeps recurring — not the quality or style of the most recent message.",
+  criteria: {
+    converging:
+      "Each turn resolves something. The work is moving toward a conclusion, decision, or deliverable.",
+    stuck_detail:
+      "Turns keep adding finer detail without resolving the underlying question or reaching a decision. The work has lost altitude.",
+    stuck_framing:
+      "Turns circle the same issue in different words. Progress is blocked by how the problem is framed, not by missing effort.",
+    early: "Too few turns, or too little substance, to judge progress.",
+  },
+};
+
 const REQUESTS = {
   "udp-db-uses": "UDP datagrams and what they can meaningfully be used for, like in databases?",
   "moq-basis": "UDP is just used as a basis for protocols like MOQ right?",
@@ -232,6 +271,94 @@ const SESSION_HISTORY = {
 
 // ----------------------------------------------------------------- runtime
 
+const PHASE_CASES = [
+  {
+    id: "design-settled",
+    turns: [
+      { role: "user", text: "We need multi-tenancy in the API. How should we scope it?" },
+      { role: "assistant", text: "Three shapes: shared schema with tenant_id, schema-per-tenant, or database-per-tenant. The tradeoff is isolation versus operational cost. Which matters most — isolation guarantees, migration simplicity, or per-tenant scale?" },
+      { role: "user", text: "Isolation is the priority. Postgres, about 200 tenants, and migrations need to stay simple." },
+      { role: "assistant", text: "Then shared schema with tenant_id plus row-level security is right. Database-per-tenant isolates hardest but 200 databases makes migrations painful. RLS gives the isolation without the migration sprawl." },
+      { role: "user", text: "Agreed. Anything else to settle before we start?" },
+      { role: "assistant", text: "Two small ones, both settleable now: the session variable name, and whether tenant resolution lives in middleware or the pool. Middleware is simpler and more testable. Pick those and the design is settled." },
+      { role: "user", text: "app.tenant_id, middleware. Agreed." },
+    ],
+    expect: "build · ready HIGH",
+  },
+  {
+    id: "design-open",
+    turns: [
+      { role: "user", text: "Should we move to event sourcing for the orders service?" },
+      { role: "assistant", text: "It depends on whether you need a full audit trail and temporal queries, or just current state. Event sourcing changes how you handle schema evolution, projections, and replay — and it is hard to reverse once you commit." },
+      { role: "user", text: "We do need an audit trail, but I am not sure about the operational burden." },
+      { role: "assistant", text: "Then the open questions are: which events are authoritative, how projections are rebuilt, and whether you keep a relational read model. Until those are decided, an implementation would likely be thrown away." },
+    ],
+    expect: "design · ready low",
+  },
+  {
+    id: "build-ambiguity",
+    turns: [
+      { role: "user", text: "Go ahead and add the tenant_id column and the RLS policies." },
+      { role: "assistant", text: "Added tenant_id to the 14 tenant-scoped tables and the RLS policy migration. Tests pass." },
+      { role: "user", text: "Now wire up the background job runner to set the tenant context." },
+      { role: "assistant", text: "Working on it — but this surfaced an unresolved design question. Background jobs have no request middleware, so there is no natural place to set app.tenant_id. We need to decide whether jobs carry an explicit tenant argument or run under a service role that bypasses RLS. That changes the job API shape." },
+    ],
+    expect: "design (ambiguity surfaced)",
+  },
+  {
+    id: "build-progress",
+    turns: [
+      { role: "user", text: "Add the tenant_id column and the RLS policies as we agreed." },
+      { role: "assistant", text: "Added tenant_id to the 14 tenant-scoped tables, wrote the RLS migration, and updated the models. Tests pass." },
+      { role: "user", text: "Now the middleware." },
+      { role: "assistant", text: "Middleware added and wired into the request pipeline. It reads the tenant from the JWT claim, sets app.tenant_id on the connection, and resets it after the request. Added integration tests for cross-tenant leakage." },
+    ],
+    expect: "build",
+  },
+  {
+    id: "detail-spiral",
+    turns: [
+      { role: "user", text: "How should we structure the config loader?" },
+      { role: "assistant", text: "A layered loader: defaults, then file, then env, then flags. Should the merge be deep or shallow for nested objects?" },
+      { role: "user", text: "Deep. What about arrays?" },
+      { role: "assistant", text: "Concatenate or replace? And if concatenate, do duplicates dedupe? Should the dedupe be case-sensitive?" },
+      { role: "user", text: "Hmm. What if the array holds objects — dedupe by identity or by a key?" },
+      { role: "assistant", text: "By key, presumably, but which key? And should that be configurable per array? Then there is the question of ordering — does the file override or append?" },
+      { role: "user", text: "And what about null versus missing?" },
+      { role: "assistant", text: "Three states then: absent, explicit null, and defaulted. Does explicit null mean delete the key, or set it to null? And does that propagate to nested merges?" },
+    ],
+    expect: "stuck_detail",
+  },
+  {
+    id: "framing-loop",
+    turns: [
+      { role: "user", text: "Our API is slow. How do we make it faster?" },
+      { role: "assistant", text: "Where is the time going? We should profile before optimizing." },
+      { role: "user", text: "I think it is the database. How do we make the database faster?" },
+      { role: "assistant", text: "Adding indexes might help, but without a profile we do not know which queries matter. The framing may be the issue: \"the API is slow\" is not a measurable problem yet." },
+      { role: "user", text: "Right, but suppose it is the database. What then?" },
+      { role: "assistant", text: "The same answer: we need to know which query. We keep returning to the same point — the question assumes a cause that has not been established." },
+      { role: "user", text: "OK but if it is the database, do we add indexes or rewrite the queries?" },
+      { role: "assistant", text: "This is the same question again. Until we measure, \"add indexes or rewrite\" is unanswerable, and we have now covered it three times with different wording." },
+    ],
+    expect: "stuck_framing",
+  },
+  {
+    id: "general-chat",
+    turns: [
+      { role: "user", text: "What does the team usually do for on-call rotations?" },
+      { role: "assistant", text: "Usually a weekly rotation with a primary and a secondary, plus a documented escalation path. Happy to dig into specifics if you want." },
+      { role: "user", text: "Just curious how it compares to what other teams do." },
+    ],
+    expect: "general",
+  },
+  {
+    id: "early",
+    turns: [{ role: "user", text: "What is a connection pool?" }],
+    expect: "early",
+  },
+];
+
 async function ask(state, questions) {
   const response = await fetch(ENDPOINT, {
     method: "POST",
@@ -260,6 +387,18 @@ function scoreExpected(payload, id) {
   const answer = payload.answers?.[id];
   if (!answer || answer.type !== "score") throw new Error(`missing score answer: ${id}`);
   return answer.score;
+}
+
+function choice(payload, id) {
+  const answer = payload.answers?.[id];
+  if (!answer || answer.type !== "choice") throw new Error(`missing choice answer: ${id}`);
+  return answer.choice;
+}
+
+function choiceConfidence(payload, id) {
+  const answer = payload.answers?.[id];
+  if (!answer || answer.type !== "choice") throw new Error(`missing choice answer: ${id}`);
+  return answer.confidence ?? 0;
 }
 
 const pad = (value, width) => String(value).padEnd(width);
@@ -383,10 +522,40 @@ async function runSession(label, decompQuestion) {
   }
 }
 
+async function runPhase() {
+  console.log("\n=== PHASE / TRAJECTORY (conversation) ===");
+  console.log(
+    `${pad("case", 18)}${pad("phase", 10)}${pad("pconf", 7)}${pad("ready", 7)}${pad("trajectory", 14)}${pad("tconf", 7)}expectation`,
+  );
+  console.log("-".repeat(125));
+  for (const testCase of PHASE_CASES) {
+    const payload = await ask(
+      { recent_conversation: testCase.turns.map((turn) => `${turn.role}: ${turn.text}`) },
+      {
+        next_phase: NEXT_PHASE_QUESTION,
+        implementation_ready: IMPLEMENTATION_READY_QUESTION,
+        trajectory: TRAJECTORY_QUESTION,
+      },
+    );
+    console.log(
+      `${pad(testCase.id, 18)}${pad(choice(payload, "next_phase"), 10)}${pad(
+        f3(choiceConfidence(payload, "next_phase")),
+        7,
+      )}${pad(f3(noul(payload, "implementation_ready")), 7)}${pad(
+        choice(payload, "trajectory"),
+        14,
+      )}${pad(f3(choiceConfidence(payload, "trajectory")), 7)}${testCase.expect}`,
+    );
+  }
+}
+
 try {
   console.log(`model=${MODEL} endpoint=${ENDPOINT}`);
   const sessionOnly = process.argv.includes("--session-only");
-  if (sessionOnly) {
+  const phaseOnly = process.argv.includes("--phase-only");
+  if (phaseOnly) {
+    await runPhase();
+  } else if (sessionOnly) {
     await runSession("CURRENT main questions", DECOMPOSITION_QUESTION_CURRENT);
     await runSession("PROPOSED questions", DECOMPOSITION_QUESTION);
     await runSessionWithHistory("CURRENT main questions", DECOMPOSITION_QUESTION_CURRENT);
@@ -400,6 +569,7 @@ try {
     await runPost("v2", VERIFY_ANSWER_QUESTION_V2, VERIFY_EVASIVE_QUESTION_V2);
     await runSession("CURRENT main questions", DECOMPOSITION_QUESTION_CURRENT);
     await runSession("PROPOSED questions", DECOMPOSITION_QUESTION);
+    await runPhase();
   }
   console.log("");
 } catch (error) {
