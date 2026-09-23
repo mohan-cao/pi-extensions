@@ -169,6 +169,41 @@ const TRAJECTORY_QUESTION = {
   },
 };
 
+// v2: judge the subject matter, not the conversation's momentum. The v1 wording
+// told this question to "judge the trajectory of the work", which is the same
+// instruction the trajectory question gets — so the two co-fire.
+const NEXT_PHASE_QUESTION_V2 = {
+  type: "choice",
+  instructions:
+    "What kind of work does this conversation need next? Judge the subject matter — what has been settled and what is still open — not how smoothly the conversation has been going.",
+  criteria: {
+    build:
+      "Implementation, tests, mechanical debugging, or straightforward code changes. The decisions needed to act are already settled.",
+    design:
+      "Architecture, ambiguous requirements, nuanced tradeoffs, adversarial review, or difficult debugging. Something material is still unresolved.",
+    general:
+      "General conversation, investigation, or mixed work that neither implementation nor design specifically describes.",
+  },
+};
+
+// v2: judge the process pattern, independent of subject matter. The v1 wording
+// asked what "has been resolved and what keeps recurring" — the same basis the
+// phase question used.
+const TRAJECTORY_QUESTION_V2 = {
+  type: "choice",
+  instructions:
+    "Is this conversation making progress, independent of what it is about? Judge the pattern across recent turns — is each turn covering new ground and resolving something, or is ground being revisited at increasing depth or in different words?",
+  criteria: {
+    converging:
+      "Each turn covers new ground and resolves something. The conversation is moving toward a conclusion or decision.",
+    stuck_detail:
+      "Turns keep going deeper into detail without resolving anything or reaching a decision.",
+    stuck_framing:
+      "Turns revisit the same issue in different words. Progress is blocked by how the problem is framed, not by missing effort.",
+    early: "Too few turns, or too little substance, to judge progress.",
+  },
+};
+
 const REQUESTS = {
   "udp-db-uses": "UDP datagrams and what they can meaningfully be used for, like in databases?",
   "moq-basis": "UDP is just used as a basis for protocols like MOQ right?",
@@ -522,29 +557,29 @@ async function runSession(label, decompQuestion) {
   }
 }
 
-async function runPhase() {
-  console.log("\n=== PHASE / TRAJECTORY (conversation) ===");
+async function runPhase(label, nextPhaseQuestion, trajectoryQuestion, includeReady) {
+  console.log(`\n=== PHASE / TRAJECTORY — ${label} ===`);
   console.log(
-    `${pad("case", 18)}${pad("phase", 10)}${pad("pconf", 7)}${pad("ready", 7)}${pad("trajectory", 14)}${pad("tconf", 7)}expectation`,
+    `${pad("case", 18)}${pad("phase", 10)}${pad("pconf", 7)}${includeReady ? pad("ready", 7) : ""}${pad("trajectory", 14)}${pad("tconf", 7)}expectation`,
   );
   console.log("-".repeat(125));
   for (const testCase of PHASE_CASES) {
+    const questions = { next_phase: nextPhaseQuestion, trajectory: trajectoryQuestion };
+    if (includeReady) questions.implementation_ready = IMPLEMENTATION_READY_QUESTION;
+
     const payload = await ask(
       { recent_conversation: testCase.turns.map((turn) => `${turn.role}: ${turn.text}`) },
-      {
-        next_phase: NEXT_PHASE_QUESTION,
-        implementation_ready: IMPLEMENTATION_READY_QUESTION,
-        trajectory: TRAJECTORY_QUESTION,
-      },
+      questions,
     );
+    const ready = includeReady ? pad(f3(noul(payload, "implementation_ready")), 7) : "";
     console.log(
       `${pad(testCase.id, 18)}${pad(choice(payload, "next_phase"), 10)}${pad(
         f3(choiceConfidence(payload, "next_phase")),
         7,
-      )}${pad(f3(noul(payload, "implementation_ready")), 7)}${pad(
-        choice(payload, "trajectory"),
-        14,
-      )}${pad(f3(choiceConfidence(payload, "trajectory")), 7)}${testCase.expect}`,
+      )}${ready}${pad(choice(payload, "trajectory"), 14)}${pad(
+        f3(choiceConfidence(payload, "trajectory")),
+        7,
+      )}${testCase.expect}`,
     );
   }
 }
@@ -554,7 +589,9 @@ try {
   const sessionOnly = process.argv.includes("--session-only");
   const phaseOnly = process.argv.includes("--phase-only");
   if (phaseOnly) {
-    await runPhase();
+    await runPhase("v1 (shipped wording)", NEXT_PHASE_QUESTION, TRAJECTORY_QUESTION, true);
+    await runPhase("v2 (separated bases, no ready)", NEXT_PHASE_QUESTION_V2, TRAJECTORY_QUESTION_V2, false);
+    await runPhase("v3 (separated bases + ready)", NEXT_PHASE_QUESTION_V2, TRAJECTORY_QUESTION_V2, true);
   } else if (sessionOnly) {
     await runSession("CURRENT main questions", DECOMPOSITION_QUESTION_CURRENT);
     await runSession("PROPOSED questions", DECOMPOSITION_QUESTION);
@@ -569,7 +606,8 @@ try {
     await runPost("v2", VERIFY_ANSWER_QUESTION_V2, VERIFY_EVASIVE_QUESTION_V2);
     await runSession("CURRENT main questions", DECOMPOSITION_QUESTION_CURRENT);
     await runSession("PROPOSED questions", DECOMPOSITION_QUESTION);
-    await runPhase();
+    await runPhase("v1 (shipped wording)", NEXT_PHASE_QUESTION, TRAJECTORY_QUESTION, true);
+    await runPhase("v2 (separated bases)", NEXT_PHASE_QUESTION_V2, TRAJECTORY_QUESTION_V2, false);
   }
   console.log("");
 } catch (error) {
