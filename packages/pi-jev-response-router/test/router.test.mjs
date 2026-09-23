@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import { TtlCache } from "../dist/cache.js";
+import {
+  FOOTER_MODES,
+  loadPreferences,
+  preferencesPath,
+  savePreferences,
+} from "../dist/preferences.js";
 import { buildState } from "../dist/context.js";
 import {
   classifyWithJev,
@@ -164,4 +173,57 @@ test("formatVerifyStatus only flags vague or tricky", () => {
   assert.equal(formatVerifyStatus({ ...base, flag: "ok" }), undefined);
   assert.match(formatVerifyStatus({ ...base, flag: "vague" }), /vagueness/);
   assert.match(formatVerifyStatus({ ...base, flag: "tricky" }), /tricky/);
+});
+
+function withAgentDir(run) {
+  const dir = mkdtempSync(join(tmpdir(), "jev-prefs-"));
+  const previous = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = dir;
+  try {
+    return run(dir);
+  } finally {
+    if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previous;
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("preferences path honors PI_CODING_AGENT_DIR", () => {
+  withAgentDir((dir) => {
+    assert.equal(preferencesPath(), join(dir, "pi-jev-response-router.json"));
+  });
+});
+
+test("preferences round-trip through the agent dir", () => {
+  withAgentDir(() => {
+    assert.deepEqual(loadPreferences(), {});
+
+    assert.equal(
+      savePreferences({ enabled: false, debug: true, verify: false, footer: "icons" }),
+      true,
+    );
+    assert.deepEqual(loadPreferences(), {
+      enabled: false,
+      debug: true,
+      verify: false,
+      footer: "icons",
+    });
+  });
+});
+
+test("preferences ignore corrupt files and invalid values", () => {
+  withAgentDir(() => {
+    writeFileSync(preferencesPath(), "{ not json");
+    assert.deepEqual(loadPreferences(), {});
+
+    writeFileSync(
+      preferencesPath(),
+      JSON.stringify({ enabled: "yes", debug: 1, verify: true, footer: "bogus", extra: 1 }),
+    );
+    assert.deepEqual(loadPreferences(), { verify: true });
+  });
+});
+
+test("footer modes are the documented set", () => {
+  assert.deepEqual([...FOOTER_MODES], ["compact", "icons", "off"]);
 });

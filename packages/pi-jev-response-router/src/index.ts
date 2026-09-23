@@ -5,6 +5,13 @@ import { loadConfig } from "./config.js";
 import { lastExchange, recentHistory } from "./context.js";
 import { classifyWithJev } from "./jev-client.js";
 import { policyFor } from "./policies.js";
+import {
+  FOOTER_MODES,
+  loadPreferences,
+  preferencesPath,
+  savePreferences,
+  type FooterMode,
+} from "./preferences.js";
 import { JEV_PROVIDER_ID, registerJevAuthProvider } from "./provider.js";
 import type { ClassificationResult } from "./types.js";
 import { formatVerifyStatus, verifyResponse } from "./verify.js";
@@ -24,9 +31,18 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
 
   const config = loadConfig();
   const cache = new TtlCache<ClassificationResult>(config.cacheTtlMs, config.cacheMaxEntries);
-  let enabled = true;
-  let debug = false;
-  let verifyEnabled = config.verify;
+
+  // Persisted preferences win over environment-derived defaults, so a command is
+  // durable while env still works as a one-shot override when no file exists.
+  const stored = loadPreferences();
+  let enabled = stored.enabled ?? true;
+  let debug = stored.debug ?? false;
+  let verifyEnabled = stored.verify ?? config.verify;
+  let footer: FooterMode = stored.footer ?? "compact";
+
+  function persist(): boolean {
+    return savePreferences({ enabled, debug, verify: verifyEnabled, footer });
+  }
 
   async function resolveApiKey(ctx: ExtensionContext) {
     const auth = await ctx.modelRegistry.getProviderAuth(JEV_PROVIDER_ID);
@@ -35,40 +51,57 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
 
   pi.registerCommand("jev-router", {
     description:
-      "Control/test the Jev response router: status | on | off | debug on|off | verify on|off | clear-cache | classify <text>",
+      "Control/test the Jev response router: status | on | off | debug on|off | verify on|off | footer compact|icons|off | clear-cache | classify <text>",
     handler: async (rawArgs, ctx) => {
       const args = rawArgs.trim();
 
       if (args === "on") {
         enabled = true;
+        persist();
         ctx.ui.notify("Jev response router enabled", "info");
         return;
       }
       if (args === "off") {
         enabled = false;
+        persist();
         ctx.ui.setStatus(VERIFY_STATUS_KEY, undefined);
         ctx.ui.notify("Jev response router disabled", "info");
         return;
       }
       if (args === "debug on") {
         debug = true;
+        persist();
         ctx.ui.notify("Jev response router debug notifications enabled", "info");
         return;
       }
       if (args === "debug off") {
         debug = false;
+        persist();
         ctx.ui.notify("Jev response router debug notifications disabled", "info");
         return;
       }
       if (args === "verify on") {
         verifyEnabled = true;
+        persist();
         ctx.ui.notify("Jev post-generation verification enabled", "info");
         return;
       }
       if (args === "verify off") {
         verifyEnabled = false;
+        persist();
         ctx.ui.setStatus(VERIFY_STATUS_KEY, undefined);
         ctx.ui.notify("Jev post-generation verification disabled", "info");
+        return;
+      }
+      if (args.startsWith("footer ")) {
+        const mode = args.slice("footer ".length).trim();
+        if (!(FOOTER_MODES as readonly string[]).includes(mode)) {
+          ctx.ui.notify(`Unknown footer mode "${mode}". Use: compact, icons, off.`, "warning");
+          return;
+        }
+        footer = mode as FooterMode;
+        persist();
+        ctx.ui.notify(`Jev footer mode: ${footer}`, "info");
         return;
       }
       if (args === "clear-cache") {
@@ -108,11 +141,13 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
           `Jev router: ${enabled ? "on" : "off"}`,
           `verify=${verifyEnabled ? "on" : "off"}`,
           `debug=${debug ? "on" : "off"}`,
+          `footer=${footer}`,
           authState,
           `model=${config.model}`,
           `thresholds: decomp>=${config.decompositionThreshold}, bounded>=${config.boundedVerificationThreshold}`,
           `history=${config.historyTurns} turns`,
           `cache=${cache.size}/${config.cacheMaxEntries}`,
+          `prefs=${preferencesPath()}`,
         ].join("; "),
         "info",
       );
@@ -219,5 +254,12 @@ export { classifyWithJev, parseClassificationResponse, parseNoulAnswer } from ".
 export { policyFor } from "./policies.js";
 export { verifyResponse, formatVerifyStatus } from "./verify.js";
 export { TtlCache } from "./cache.js";
+export {
+  FOOTER_MODES,
+  loadPreferences,
+  preferencesPath,
+  savePreferences,
+} from "./preferences.js";
+export type { FooterMode, Preferences } from "./preferences.js";
 export type { ClassificationResult, ResponseMode, RouterConfig } from "./types.js";
 export type { VerifyResult, VerifyFlag } from "./verify.js";
