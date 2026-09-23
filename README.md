@@ -72,6 +72,9 @@ You can also provide `TYPESAFE_API_KEY` in the environment. An explicitly stored
 /jev-router verify off
 /jev-router debug on
 /jev-router debug off
+/jev-router footer compact
+/jev-router footer icons
+/jev-router footer off
 /jev-router clear-cache
 /jev-router classify UDP preserves datagram boundaries, right?
 ```
@@ -103,6 +106,31 @@ All configuration is optional:
 `PI_JEV_ROUTER_MIN_CONFIDENCE` is deprecated. In `0.1.x` it was effectively a
 no-op (confidence is in `[0, 1]` and the default was `0`). It now serves as a
 shared fallback default for the two real thresholds when they are unset.
+
+### Persisted preferences
+
+`/jev-router on|off`, `debug`, `verify`, and `footer` write to a small JSON file
+under the agent config directory, so they survive `/reload` and new sessions:
+
+```text
+~/.pi/agent/pi-jev-response-router.json
+{
+  "enabled": true,
+  "debug": false,
+  "verify": true,
+  "footer": "compact"
+}
+```
+
+The path honors `PI_CODING_AGENT_DIR`. A missing or corrupt file falls back to
+the environment defaults. Only runtime toggles persist; endpoint, model,
+thresholds, and routes stay in the environment. Precedence is
+**file > environment > default**, so a command is durable while an env var still
+works as a one-shot override when no file exists.
+
+`footer` selects how footer statuses render — `compact` (icon + label, default),
+`icons` (glyph only), or `off`. It is reserved for the work-phase and coaching
+statuses and has no effect on the current quality status yet.
 
 The router fails silently: if Jev is unavailable, unauthenticated, or returns an
 invalid schema, Pi answers normally. Turn on debug notifications to surface

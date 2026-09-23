@@ -280,15 +280,17 @@ Notes:
 
 ## Preferences persistence
 
-Prerequisite for the footer preference — and it fixes the existing toggles at the same time.
+**Implemented** on `feat/persist-preferences`. Prerequisite for the footer preference — and it
+fixes the existing toggles at the same time.
 
-The current toggles are in-memory module variables, so `/jev-router verify on|off` (and
-`debug`, `enabled`) reset on `/reload` and in every new session. Pi's storage guidance is that
-state living outside one session belongs in external storage, and there is no settings API on
-`ExtensionAPI` / `ExtensionContext`, so the extension owns a small file:
+The toggles were in-memory module variables, so `/jev-router verify on|off` (and `debug`,
+`enabled`) reset on `/reload` and in every new session. Pi's storage guidance is that state
+living outside one session belongs in external storage, and there is no settings API on
+`ExtensionAPI` / `ExtensionContext`, so the extension owns a small file. The path comes from
+`getAgentDir()`, which honors `PI_CODING_AGENT_DIR` and the configured `CONFIG_DIR_NAME`:
 
 ```text
-~/.pi/agent/pi-jev-response-router.json     # built with CONFIG_DIR_NAME, never ".pi"
+~/.pi/agent/pi-jev-response-router.json
 {
   "enabled": true,
   "debug": false,
@@ -302,6 +304,8 @@ state living outside one session belongs in external storage, and there is no se
 - Only runtime toggles persist. Endpoint, model, thresholds, and routes stay in env/config.
 - Precedence: **persisted file > environment > built-in default**, so a command is durable
   while env still works as a one-shot override when no file exists.
+- `footer` is settable and persisted now, but **reserved**: nothing consumes it until the
+  work-phase and coaching statuses ship.
 
 ## Configuration
 
@@ -387,9 +391,8 @@ a coin flip).
 ## Dependencies and sequencing
 
 1. ~~Merge PR3 (`feat/verify-signal`).~~ Done — `verify.ts` is in `main`, released as `0.3.0`.
-2. **Preferences persistence** — a small JSON file so `enabled` / `debug` / `verify` / `footer`
-   survive reload and new sessions. Prerequisite for the footer preference, a Pi-package
-   concern (not core), and independent of everything else — worth landing on its own.
+2. ~~**Preferences persistence**~~ Done on `feat/persist-preferences` — a small JSON file so
+   `enabled` / `debug` / `verify` / `footer` survive reload and new sessions.
 3. Extract the core package (`@mohan-cao/jev-classifier`) as a behaviour-preserving refactor.
 4. Land the corrected response-mode questions (v3 wording, `premise_defect`,
    `obligation_unmet`, threshold 0.6).
