@@ -72,7 +72,6 @@ export function loadPhaseConfig(): PhaseConfig {
   return {
     routes,
     phaseConfidenceThreshold: clamp(numberFromEnv("PI_JEV_PHASE_CONFIDENCE_THRESHOLD", 0.7), 0, 1),
-    implementationReadyThreshold: clamp(numberFromEnv("PI_JEV_PHASE_READY_THRESHOLD", 0.5), 0, 1),
     trajectoryConfidenceThreshold: clamp(numberFromEnv("PI_JEV_TRAJECTORY_THRESHOLD", 0.7), 0, 1),
     historyTurns: Math.max(0, Math.floor(numberFromEnv("PI_JEV_PHASE_HISTORY_TURNS", 8))),
   };

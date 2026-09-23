@@ -77,8 +77,6 @@ export interface PhaseJudgment {
   /** The phase the next work should be in. Never `stay` — that is a policy decision. */
   phase: Phase;
   phaseConfidence: number;
-  /** P(the material design decisions are settled enough to implement). */
-  implementationReady: number;
   trajectory: Trajectory;
   trajectoryConfidence: number;
   model?: string;
@@ -96,8 +94,6 @@ export interface PhaseConfig {
   routes: Partial<Record<Phase, PhaseRoute>>;
   /** Minimum Choice confidence before a routing nudge is shown. */
   phaseConfidenceThreshold: number;
-  /** Minimum P(implementation ready) to corroborate a `design → build` move. */
-  implementationReadyThreshold: number;
   /** Minimum Choice confidence before a stuck-pattern hint is shown. */
   trajectoryConfidenceThreshold: number;
   /** Conversation turns supplied to the phase judge. */

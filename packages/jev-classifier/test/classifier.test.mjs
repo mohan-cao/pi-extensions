@@ -231,7 +231,6 @@ const phaseConfig = {
     general: { model: "general-model" },
   },
   phaseConfidenceThreshold: 0.7,
-  implementationReadyThreshold: 0.5,
   trajectoryConfidenceThreshold: 0.7,
   historyTurns: 8,
 };
@@ -240,7 +239,6 @@ function judgment(overrides = {}) {
   return {
     phase: "build",
     phaseConfidence: 0.9,
-    implementationReady: 0.9,
     trajectory: "converging",
     trajectoryConfidence: 0.9,
     ...overrides,
@@ -262,21 +260,6 @@ test("phaseRecommendation fires only on a known mismatch", () => {
   assert.equal(
     phaseRecommendation(judgment({ phaseConfidence: 0.4 }), "design-model", phaseConfig),
     undefined,
-  );
-});
-
-test("design to build requires implementation_ready", () => {
-  assert.equal(
-    phaseRecommendation(judgment({ implementationReady: 0.2 }), "design-model", phaseConfig),
-    undefined,
-  );
-  // The gate applies only to that transition.
-  assert.ok(
-    phaseRecommendation(
-      judgment({ phase: "general", implementationReady: 0.2 }),
-      "design-model",
-      phaseConfig,
-    ),
   );
 });
 

@@ -79,10 +79,9 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
 
   function describeLastJudgment(): string {
     if (!lastJudgment) return "none yet";
-    const { phase, phaseConfidence, implementationReady, trajectory, trajectoryConfidence } =
-      lastJudgment;
+    const { phase, phaseConfidence, trajectory, trajectoryConfidence } = lastJudgment;
     const nudge = lastRecommendation ? "" : " (no nudge)";
-    return `${phase}@${phaseConfidence.toFixed(2)} ready=${implementationReady.toFixed(2)} ${trajectory}@${trajectoryConfidence.toFixed(2)}${nudge}`;
+    return `${phase}@${phaseConfidence.toFixed(2)} ${trajectory}@${trajectoryConfidence.toFixed(2)}${nudge}`;
   }
 
   async function reportStatus(ctx: ExtensionContext): Promise<void> {
@@ -183,7 +182,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
 
       if (state.debug) {
         ctx.ui.notify(
-          `Jev phase: ${judgment.phase} (conf=${judgment.phaseConfidence.toFixed(2)}, ready=${judgment.implementationReady.toFixed(2)}, trajectory=${judgment.trajectory}@${judgment.trajectoryConfidence.toFixed(2)})`,
+          `Jev phase: ${judgment.phase} (conf=${judgment.phaseConfidence.toFixed(2)}, trajectory=${judgment.trajectory}@${judgment.trajectoryConfidence.toFixed(2)})`,
           "info",
         );
       }

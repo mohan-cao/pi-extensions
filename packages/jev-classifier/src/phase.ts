@@ -1,9 +1,5 @@
-import { callSystemOne, parseChoiceAnswer, parseNoulAnswer } from "./client.js";
-import {
-  IMPLEMENTATION_READY_QUESTION,
-  NEXT_PHASE_QUESTION,
-  TRAJECTORY_QUESTION,
-} from "./questions.js";
+import { callSystemOne, parseChoiceAnswer } from "./client.js";
+import { NEXT_PHASE_QUESTION, TRAJECTORY_QUESTION } from "./questions.js";
 import {
   PHASES,
   TRAJECTORIES,
@@ -18,7 +14,6 @@ import {
 } from "./types.js";
 
 const PHASE_ID = "next_phase";
-const READY_ID = "implementation_ready";
 const TRAJECTORY_ID = "trajectory";
 
 /**
@@ -36,7 +31,6 @@ export async function judgePhase(
     { recent_conversation: turns.map((turn) => `${turn.role}: ${turn.text}`) },
     {
       [PHASE_ID]: NEXT_PHASE_QUESTION,
-      [READY_ID]: IMPLEMENTATION_READY_QUESTION,
       [TRAJECTORY_ID]: TRAJECTORY_QUESTION,
     },
     apiKey,
@@ -50,7 +44,6 @@ export async function judgePhase(
   const judgment = {
     phase: phase.choice,
     phaseConfidence: phase.confidence,
-    implementationReady: parseNoulAnswer(payload, READY_ID),
     trajectory: trajectory.choice,
     trajectoryConfidence: trajectory.confidence,
   };
@@ -83,16 +76,6 @@ export function phaseRecommendation(
 
   const currentPhase = phaseForModel(currentModelId, config);
   if (!currentPhase || currentPhase === judgment.phase) return undefined;
-
-  // The `design → build` move is the noisy one: a reasoning model under
-  // design-shaped steering keeps producing design-shaped work. Corroborate it.
-  if (
-    currentPhase === "design" &&
-    judgment.phase === "build" &&
-    judgment.implementationReady < config.implementationReadyThreshold
-  ) {
-    return undefined;
-  }
 
   const model = modelForPhase(judgment.phase, config);
   if (!model) return undefined;

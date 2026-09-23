@@ -91,7 +91,6 @@ const hint = formatCoaching(judgment, "compact", phaseConfig.trajectoryConfidenc
 | question | type | drives |
 | --- | --- | --- |
 | `next_phase` | Choice (build / design / general) | which model suits the next work |
-| `implementation_ready` | Noul | corroborates a `design → build` move |
 | `trajectory` | Choice (converging / stuck_detail / stuck_framing / early) | the coaching hint |
 
 It is a **report, not a controller**. Jev never emits `stay` — whether a recommendation is shown
