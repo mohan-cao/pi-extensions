@@ -11,6 +11,7 @@ import {
   preferencesPath,
   savePreferences,
 } from "../dist/preferences.js";
+import piJevResponseRouter from "../dist/index.js";
 import { buildState } from "../dist/context.js";
 import {
   classifyWithJev,
@@ -226,4 +227,70 @@ test("preferences ignore corrupt files and invalid values", () => {
 
 test("footer modes are the documented set", () => {
   assert.deepEqual([...FOOTER_MODES], ["compact", "icons", "off"]);
+});
+
+test("jev-router dispatches commands by verb", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "jev-cmd-"));
+  const previous = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = dir;
+
+  try {
+    const pi = {
+      commands: new Map(),
+      registerCommand(name, options) {
+        this.commands.set(name, options);
+      },
+      registerProvider() {},
+      on() {
+        return () => {};
+      },
+    };
+    piJevResponseRouter(pi);
+    const handler = pi.commands.get("jev-router").handler;
+
+    const notifications = [];
+    const ctx = {
+      ui: {
+        notify: (message, type) => notifications.push({ message, type }),
+        setStatus: () => {},
+      },
+      modelRegistry: { getProviderAuth: async () => ({ auth: { apiKey: "test-key" } }) },
+      signal: undefined,
+    };
+    const last = () => notifications.at(-1)?.message ?? "";
+
+    await handler("verify off", ctx);
+    assert.match(last(), /post-generation verification disabled/);
+    assert.equal(loadPreferences().verify, false);
+
+    await handler("debug on", ctx);
+    assert.match(last(), /debug notifications enabled/);
+    assert.equal(loadPreferences().debug, true);
+
+    await handler("debug sideways", ctx);
+    assert.match(last(), /Usage: \/jev-router debug on\|off/);
+
+    await handler("footer icons", ctx);
+    assert.match(last(), /footer mode: icons/);
+    assert.equal(loadPreferences().footer, "icons");
+
+    await handler("footer sideways", ctx);
+    assert.match(last(), /Unknown footer mode/);
+
+    await handler("clear-cache", ctx);
+    assert.match(last(), /cache cleared/);
+
+    // Unknown verbs and empty input fall through to the status readout.
+    await handler("status", ctx);
+    assert.match(last(), /Jev router:/);
+    await handler("", ctx);
+    assert.match(last(), /Jev router:/);
+
+    await handler("classify", ctx);
+    assert.match(last(), /Usage: \/jev-router classify/);
+  } finally {
+    if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previous;
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
