@@ -74,7 +74,7 @@ running model suits it:
 
 Fires only when the running model is *known* to serve a different phase; an unmapped model
 yields no nudge. It **never switches models and never blocks a prompt** — switch with `/model`,
-and the nudge clears itself. Inert without routes configured.
+and the nudge clears itself. Inert until routes are configured (see below).
 
 **Coaching hint** (`/jev-router coaching on|off`) — is this conversation progressing?
 
@@ -85,13 +85,36 @@ Display-only. It never gates the model nudge and never changes routing.
 
 | Environment variable | Default | Meaning |
 | --- | --- | --- |
-| `PI_JEV_PHASE_BUILD_MODEL` | unset | Model that serves the `build` phase |
-| `PI_JEV_PHASE_DESIGN_MODEL` | unset | Model that serves the `design` phase |
-| `PI_JEV_PHASE_GENERAL_MODEL` | unset | Model that serves the `general` phase |
+| `PI_JEV_PHASE_BUILD_MODEL` | unset | Fallback model for the `build` phase |
+| `PI_JEV_PHASE_DESIGN_MODEL` | unset | Fallback model for the `design` phase |
+| `PI_JEV_PHASE_GENERAL_MODEL` | unset | Fallback model for the `general` phase |
 | `PI_JEV_PHASE_CONFIDENCE_THRESHOLD` | `0.7` | Minimum confidence before a model nudge |
 | `PI_JEV_PHASE_HISTORY_TURNS` | `8` | Conversation turns supplied to the phase judge |
 | `PI_JEV_TRAJECTORY_THRESHOLD` | `0.7` | Minimum confidence before a coaching hint |
 | `PI_JEV_TRAJECTORY_HISTORY_TURNS` | `8` | Conversation turns supplied to the trajectory judge |
+
+### Phase routes
+
+Routing needs to know which model serves which phase. Set it from Pi rather than from the
+environment:
+
+```text
+/jev-router route             # list the routes and where each came from
+/jev-router route build       # pick from the models you have available
+/jev-router route build gpt-5-codex
+/jev-router route build clear
+```
+
+`route <phase>` with no model opens Pi's model picker over `modelRegistry.getAvailable()`, so
+choosing a route does not mean knowing model ids by heart. The choice is written to
+`~/.pi/agent/pi-jev-response-router.json` and survives `/reload` and new sessions.
+
+**Precedence:** a saved route beats the matching environment variable, and unset phases fall
+through to the variable. `clear` stores an explicit empty value, so it also overrides a
+variable that would otherwise set that route. `/jev-router status` marks saved routes with `*`.
+
+Routes are matched on the bare model id — the value `ctx.model.id` returns — so two providers
+offering the same id are indistinguishable here.
 
 ### Decision log
 
@@ -132,6 +155,8 @@ You can also provide `TYPESAFE_API_KEY` in the environment. An explicitly stored
 /jev-router coaching off
 /jev-router log on
 /jev-router log off
+/jev-router route
+/jev-router route <phase> [model]
 /jev-router debug on
 /jev-router debug off
 /jev-router footer compact

@@ -1,4 +1,10 @@
-import type { PhaseConfig, RouterConfig, TrajectoryConfig } from "@mohan-cao/jev-classifier";
+import {
+  PHASES,
+  type Phase,
+  type PhaseConfig,
+  type RouterConfig,
+  type TrajectoryConfig,
+} from "@mohan-cao/jev-classifier";
 
 function numberFromEnv(name: string, fallback: number): number {
   const value = process.env[name];
@@ -55,19 +61,30 @@ export function loadConfig(): RouterConfig {
   };
 }
 
+/** The only place the environment variable names appear. */
+const PHASE_ENV = {
+  build: "PI_JEV_PHASE_BUILD_MODEL",
+  design: "PI_JEV_PHASE_DESIGN_MODEL",
+  general: "PI_JEV_PHASE_GENERAL_MODEL",
+} satisfies Record<Phase, string>;
+
 /**
  * Semantic phase routing stays separate from model policy: Jev emits phases, and
  * this map is the only place a provider or model name appears. The reverse
  * lookup (model to phase) is what decides whether a nudge is warranted.
+ *
+ * `overrides` comes from the preferences file, written by `/jev-router route`.
+ * A preference wins over the environment, and an empty string is a real value
+ * that clears a route the environment would otherwise set — so the test below
+ * is truthiness, not presence.
  */
-export function loadPhaseConfig(): PhaseConfig {
+
+export function loadPhaseConfig(overrides?: Partial<Record<Phase, string>>): PhaseConfig {
   const routes: PhaseConfig["routes"] = {};
-  const build = process.env.PI_JEV_PHASE_BUILD_MODEL;
-  const design = process.env.PI_JEV_PHASE_DESIGN_MODEL;
-  const general = process.env.PI_JEV_PHASE_GENERAL_MODEL;
-  if (build) routes.build = { model: build };
-  if (design) routes.design = { model: design };
-  if (general) routes.general = { model: general };
+  for (const phase of PHASES) {
+    const model = overrides?.[phase] ?? process.env[PHASE_ENV[phase]];
+    if (model) routes[phase] = { model };
+  }
 
   return {
     routes,

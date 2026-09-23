@@ -331,7 +331,8 @@ living outside one session belongs in external storage, and there is no settings
 
 - Read once at extension load; written on change by `/jev-router`.
 - Missing or corrupt file falls back to environment-derived defaults.
-- Only runtime toggles persist. Endpoint, model, thresholds, and routes stay in env/config.
+- Runtime toggles **and phase routes** persist. Endpoint, model, and thresholds stay in
+  env/config.
 - Precedence: **persisted file > environment > built-in default**, so a command is durable
   while env still works as a one-shot override when no file exists.
 - `footer` is settable and persisted now, but **reserved**: nothing consumes it until the
@@ -357,6 +358,12 @@ Semantic routing stays separate from model policy:
   If the model is unmapped, `modelPhase` is unknown.
 - Presets (economy / quality / cost-insensitive) can come later; the core extension should
   not be opinionated about specific models.
+
+Routes are set with `/jev-router route <phase> [model]`, which opens Pi's model picker over
+`modelRegistry.getAvailable()` when no id is given. This is the one place a model name enters
+the extension, and it is a **host** concern: the core receives `PhaseConfig["routes"]` as data
+and never learns where it came from. Precedence is a saved route, then `PI_JEV_PHASE_*_MODEL`,
+with `clear` storing an explicit empty value so a saved decision can override the environment.
 
 ## Dynamics: why the stability is the point
 
