@@ -2,7 +2,9 @@ import { buildState, type HistoryTurn } from "./context.js";
 import {
   BOUNDED_VERIFICATION_QUESTION,
   DECOMPOSITION_QUESTION,
+  PREMISE_DEFECT_QUESTION,
   type NoulQuestionSpec,
+  type ScoreQuestionSpec,
 } from "./prompt.js";
 import {
   type ClassificationResult,
@@ -15,6 +17,7 @@ import {
 
 const DECOMPOSITION_ID = "requires_decomposition";
 const BOUNDED_ID = "bounded_verification";
+const PREMISE_ID = "premise_defect";
 
 export class JevError extends Error {
   constructor(
@@ -186,6 +189,7 @@ export function parseClassificationResponse(
   const signals = {
     decomposition: parseNoulAnswer(payload, DECOMPOSITION_ID),
     boundedVerification: parseNoulAnswer(payload, BOUNDED_ID),
+    premiseDefect: parseScoreAnswer(payload, PREMISE_ID).score,
   };
 
   const mode = composeMode(signals, config);
@@ -223,6 +227,7 @@ export async function classifyWithJev(
     {
       [DECOMPOSITION_ID]: DECOMPOSITION_QUESTION satisfies NoulQuestionSpec,
       [BOUNDED_ID]: BOUNDED_VERIFICATION_QUESTION satisfies NoulQuestionSpec,
+      [PREMISE_ID]: PREMISE_DEFECT_QUESTION satisfies ScoreQuestionSpec,
     },
     apiKey,
     config,

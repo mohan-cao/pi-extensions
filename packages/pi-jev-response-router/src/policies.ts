@@ -44,3 +44,22 @@ export function policyFor(mode: ResponseMode): string | undefined {
       return undefined;
   }
 }
+
+const PREMISE_POLICY = `
+The current user request may rest on a false or materially misleading premise.
+If it does, state the correction in one sentence before answering. Do not
+lecture, and do not restate the correction.
+`.trim();
+
+/**
+ * The corrective modifier. Bounded verification already emits a verdict and
+ * corrections, so applying this there would only duplicate them.
+ */
+export function premisePolicyFor(
+  mode: ResponseMode,
+  premiseDefect: number,
+  threshold: number,
+): string | undefined {
+  if (mode === "bounded_verification") return undefined;
+  return premiseDefect >= threshold ? PREMISE_POLICY : undefined;
+}

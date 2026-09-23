@@ -16,19 +16,34 @@ can store and resolve the Jev API key using Pi's normal auth flow.
 ### How routing works
 
 Rather than one mutually exclusive 3-way Choice (where `normal` competes in the
-argmax), the classifier asks **two narrow Noul questions**:
+argmax), the classifier asks **narrow, independently evaluated questions**:
 
 1. `requires_decomposition` — does a reliable answer require decomposition?
 2. `bounded_verification` — is this at most three independently checkable claims?
+3. `premise_defect` (Score 0–3) — does the request presuppose something false, or
+   true only under a narrower framing than it implies?
 
-The mode is then composed in code with **decomposition taking precedence**, and
-`normal` as the residual. This is what keeps decomposition-shaped requests from
-being misrouted as normal.
+The mode is composed in code with **decomposition taking precedence** and
+`normal` as the residual, which keeps decomposition-shaped requests from being
+misrouted as normal. `requires_decomposition` judges the current request only, so
+an earlier answer's verbosity cannot inflate the score.
 
 The selected policy is injected as a named **system-prompt section**
 (`jev-response-policy`), so Pi emits a minimal prompt patch and the provider
 cache prefix survives. (Returning `systemPrompt` would replace the whole prompt
 on every mode change, i.e. a full cache miss.)
+
+### Premise correction
+
+`premise_defect` is a **modifier**, not a mode, so it composes with any response
+shape. Above `PI_JEV_ROUTER_PREMISE_THRESHOLD` (default `2.8` of 3) a second
+section (`jev-premise-policy`) asks the model to state the correction in one
+sentence before answering. It is deliberately not applied to
+`bounded_verification`, which already emits a verdict and corrections.
+
+Level 2 of the scale ("worth naming, but the request is still answerable") is
+logged but never acted on by default — that is the band for minor slips in
+wording rather than wrong beliefs.
 
 ### Verification (signal only)
 
@@ -91,6 +106,7 @@ All configuration is optional:
 | `PI_JEV_ROUTER_RETRIES` | `2` | Retries for HTTP 429/529 |
 | `PI_JEV_ROUTER_DECOMPOSITION_THRESHOLD` | `0.6` | P(decomposition) at or above which decomposition wins |
 | `PI_JEV_ROUTER_BOUNDED_THRESHOLD` | `0.6` | P(bounded verification) at or above which bounded verification wins |
+| `PI_JEV_ROUTER_PREMISE_THRESHOLD` | `2.8` | Expected premise defect (0-3) at or above which the premise is corrected |
 | `PI_JEV_ROUTER_HISTORY_TURNS` | `4` | Prior turns included in Jev state (0 disables) |
 | `PI_JEV_ROUTER_CACHE_TTL_MS` | `300000` | Classification cache TTL (0 disables) |
 | `PI_JEV_ROUTER_CACHE_MAX` | `64` | Classification cache entry cap |

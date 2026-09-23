@@ -4,7 +4,7 @@ import { TtlCache } from "./cache.js";
 import { loadConfig } from "./config.js";
 import { lastExchange, recentHistory } from "./context.js";
 import { classifyWithJev } from "./jev-client.js";
-import { policyFor } from "./policies.js";
+import { policyFor, premisePolicyFor } from "./policies.js";
 import { loadPreferences, preferencesPath, savePreferences } from "./preferences.js";
 import { JEV_PROVIDER_ID, registerJevAuthProvider } from "./provider.js";
 import { FOOTER_MODES, type ClassificationResult, type FooterMode } from "./types.js";
@@ -12,12 +12,13 @@ import { formatVerifyStatus, verifyResponse } from "./verify.js";
 
 /** System-prompt section key. Pi wraps the value in a tag of the same name. */
 const POLICY_SECTION = "jev-response-policy";
+const PREMISE_SECTION = "jev-premise-policy";
 const VERIFY_STATUS_KEY = "jev-verify";
 
 function formatDecision(result: ClassificationResult): string {
-  const { decomposition, boundedVerification } = result.signals;
+  const { decomposition, boundedVerification, premiseDefect } = result.signals;
   const suffix = result.cached ? ", cached" : "";
-  return `${result.mode} (p_decomp=${decomposition.toFixed(3)}, p_bounded=${boundedVerification.toFixed(3)}${suffix})`;
+  return `${result.mode} (p_decomp=${decomposition.toFixed(3)}, p_bounded=${boundedVerification.toFixed(3)}, premise=${premiseDefect.toFixed(2)}${suffix})`;
 }
 
 export default function piJevResponseRouter(pi: ExtensionAPI): void {
@@ -176,6 +177,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     // classification cannot inherit stale state.
     if (ctx.hasUI) ctx.ui.setStatus(VERIFY_STATUS_KEY, undefined);
     delete event.systemPromptOptions.sections[POLICY_SECTION];
+    delete event.systemPromptOptions.sections[PREMISE_SECTION];
 
     if (!enabled || !event.prompt.trim()) return;
 
@@ -206,13 +208,23 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         ctx.ui.notify(`Jev route: ${formatDecision(decision)}`, "info");
       }
 
-      const policy = policyFor(decision.mode);
-      if (!policy) return;
-
       // Mutating `sections` lets Pi emit a minimal prompt patch and keep the
       // provider cache prefix intact. Returning `systemPrompt` would replace
       // the whole prompt on every mode change, i.e. a full cache miss.
-      event.systemPromptOptions.sections[POLICY_SECTION] = policy;
+      const policy = policyFor(decision.mode);
+      if (policy) {
+        event.systemPromptOptions.sections[POLICY_SECTION] = policy;
+      }
+
+      const premisePolicy = premisePolicyFor(
+        decision.mode,
+        decision.signals.premiseDefect,
+        config.premiseDefectThreshold,
+      );
+      if (premisePolicy) {
+        event.systemPromptOptions.sections[PREMISE_SECTION] = premisePolicy;
+      }
+
       return;
     } catch (error) {
       // Fail open: a classifier outage should not prevent Pi from answering.
@@ -273,7 +285,7 @@ export {
   parseNoulAnswer,
   parseScoreAnswer,
 } from "./jev-client.js";
-export { policyFor } from "./policies.js";
+export { policyFor, premisePolicyFor } from "./policies.js";
 export { verifyResponse, formatVerifyStatus } from "./verify.js";
 export { TtlCache } from "./cache.js";
 export { loadPreferences, preferencesPath, savePreferences } from "./preferences.js";
