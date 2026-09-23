@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { appendDecision, decisionLogPath } from "../dist/decision-log.js";
 import piJevResponseRouter from "../dist/index.js";
 import { loadPreferences, preferencesPath, savePreferences } from "../dist/preferences.js";
 
@@ -54,6 +55,34 @@ test("preferences ignore corrupt files and invalid values", () => {
       JSON.stringify({ enabled: "yes", debug: 1, verify: true, footer: "bogus", extra: 1 }),
     );
     assert.deepEqual(loadPreferences(), { verify: true });
+  });
+});
+
+test("decision log appends one JSON line per record", () => {
+  withAgentDir((dir) => {
+    assert.equal(decisionLogPath(), join(dir, "jev-decisions.jsonl"));
+
+    assert.equal(
+      appendDecision({
+        at: "2026-01-01T00:00:00.000Z",
+        mode: "bounded_verification",
+        signals: { decomposition: 0.1, boundedVerification: 0.9, premiseDefect: 0 },
+        modelRunning: "model-a",
+        recommendedModel: "model-b",
+        coachingHint: false,
+      }),
+      true,
+    );
+    appendDecision({
+      at: "2026-01-01T00:01:00.000Z",
+      mode: "normal",
+      signals: { decomposition: 0.1, boundedVerification: 0.1, premiseDefect: 0 },
+    });
+
+    const lines = readFileSync(decisionLogPath(), "utf8").trim().split("\n");
+    assert.equal(lines.length, 2);
+    assert.equal(JSON.parse(lines[0]).recommendedModel, "model-b");
+    assert.equal(JSON.parse(lines[1]).mode, "normal");
   });
 });
 
@@ -111,6 +140,10 @@ test("jev-router dispatches commands by verb", async () => {
 
     await handler("coaching sideways", ctx);
     assert.match(last(), /Usage: \/jev-router coaching on\|off/);
+
+    await handler("log off", ctx);
+    assert.match(last(), /decision log disabled/);
+    assert.equal(loadPreferences().log, false);
 
     await handler("footer icons", ctx);
     assert.match(last(), /footer mode: icons/);

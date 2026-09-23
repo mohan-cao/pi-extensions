@@ -10,6 +10,7 @@ export { verifyResponse, formatVerifyStatus } from "./verify.js";
 export type { VerifyFlag, VerifyResult } from "./verify.js";
 export { judgePhase, phaseRecommendation, formatPhaseNudge } from "./phase.js";
 export { judgeTrajectory, formatCoaching } from "./trajectory.js";
+export type { DecisionRecord } from "./decision-log.js";
 export { policyFor, premisePolicyFor } from "./policies.js";
 export { TtlCache } from "./cache.js";
 export {

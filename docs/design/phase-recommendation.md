@@ -408,9 +408,12 @@ Thresholds must come from data, not intuition — the last round of threshold tu
 that (a 0.5 decomposition threshold was sitting inside the noise band, making classification
 a coin flip).
 
-1. **Log `workPhase`, `confidence`, `implementation_ready`, and `modelPhase` per turn** to
-   the same decision log used for the quality judge. This is the artifact that tunes the
-   display threshold *and* answers whether the feature is useful at all.
+1. ~~**Log the judgments per turn**~~ Done — `DecisionRecord` plus a JSONL file
+   (`~/.pi/agent/jev-decisions.jsonl`, `/jev-router log on|off`). Records judgments,
+   probabilities, and model ids, never conversation text. Acceptance of a nudge is derived by
+   diffing consecutive records (`recommendedModel` at turn N vs `modelRunning` at N+1). This is
+   the artifact that tunes the thresholds *and* answers whether the feature is useful at all —
+   though it yields distributions and proxies, not correctness.
 2. ~~**Build a transition eval set**~~ Done — eight cases in `scripts/jev-eval.mjs`
    (`--phase-only`): design-settled, design-open, build-ambiguity, build-progress,
    detail-spiral, framing-loop, general-chat, early.

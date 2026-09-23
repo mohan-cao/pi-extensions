@@ -108,6 +108,16 @@ Both gates are `0.7`, measured rather than guessed. `stuck_detail` requires *esc
 repetition*, not mere unresolvedness — an early design conversation that keeps opening questions
 is not a spiral.
 
+## Decision log
+
+`DecisionRecord` is the shape of one settled turn — judgments, probabilities, and model ids,
+never conversation text. Where it goes is the harness's business; the Pi extension appends it as
+JSONL under the agent config directory.
+
+Acceptance of a model nudge is derived by diffing consecutive records (`recommendedModel` at
+turn N vs `modelRunning` at turn N+1), which is the only correctness proxy available without
+hand-labelling.
+
 ## Design notes
 
 **Observe vs decide.** Jev only observes — what shape the request needs, whether a premise is

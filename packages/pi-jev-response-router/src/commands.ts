@@ -9,6 +9,7 @@ export interface RouterState {
   verify: boolean;
   phase: boolean;
   coaching: boolean;
+  log: boolean;
   footer: FooterMode;
 }
 
@@ -35,6 +36,7 @@ const TOGGLE_LABEL = {
   verify: "Jev post-generation verification",
   phase: "Jev phase recommendation",
   coaching: "Jev coaching hint",
+  log: "Jev decision log",
 } as const;
 
 function booleanToggle(value: string): boolean | undefined {
@@ -129,6 +131,14 @@ const COMMANDS = new Map<string, RouterCommand>([
       usage: "coaching on|off",
       description: "toggle the stuck-conversation hint",
       run: (deps, rest, ctx) => toggle(deps, "coaching", rest, ctx),
+    },
+  ],
+  [
+    "log",
+    {
+      usage: "log on|off",
+      description: "append one JSON line per settled turn to a local file",
+      run: (deps, rest, ctx) => toggle(deps, "log", rest, ctx),
     },
   ],
   [

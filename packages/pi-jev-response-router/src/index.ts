@@ -14,9 +14,11 @@ import {
   premisePolicyFor,
   verifyResponse,
   type ClassificationResult,
+  type DecisionRecord,
   type PhaseJudgment,
   type PhaseRecommendation,
   type TrajectoryJudgment,
+  type VerifyResult,
 } from "@mohan-cao/jev-classifier";
 
 import {
@@ -26,6 +28,7 @@ import {
 } from "./commands.js";
 import { loadConfig, loadPhaseConfig, loadTrajectoryConfig } from "./config.js";
 import { lastExchange, recentHistory } from "./context.js";
+import { appendDecision, decisionLogPath } from "./decision-log.js";
 import { loadPreferences, preferencesPath, savePreferences } from "./preferences.js";
 import { JEV_PROVIDER_ID, registerJevAuthProvider } from "./provider.js";
 
@@ -59,8 +62,13 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     verify: stored.verify ?? config.verify,
     phase: stored.phase ?? true,
     coaching: stored.coaching ?? true,
+    log: stored.log ?? true,
     footer: stored.footer ?? "compact",
   };
+
+  // Assembled across a turn: classification in `before_agent_start`, the
+  // post-generation judgments in `agent_settled`, written once at the end.
+  let pending: DecisionRecord | undefined;
 
   // Kept for the status readout, so "why is nothing showing?" is answerable.
   let lastPhase: PhaseJudgment | undefined;
@@ -74,6 +82,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       verify: state.verify,
       phase: state.phase,
       coaching: state.coaching,
+      log: state.log,
       footer: state.footer,
     });
   }
@@ -106,6 +115,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         `verify=${state.verify ? "on" : "off"}`,
         `phase=${state.phase ? "on" : "off"}`,
         `coaching=${state.coaching ? "on" : "off"}`,
+        `log=${state.log ? "on" : "off"}`,
         `debug=${state.debug ? "on" : "off"}`,
         `footer=${state.footer}`,
         authState,
@@ -114,6 +124,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         `history=${config.historyTurns} turns`,
         `cache=${cache.size}/${config.cacheMaxEntries}`,
         `prefs=${preferencesPath()}`,
+        `decisions=${decisionLogPath()}`,
         `phaseRoutes=${routes.length > 0 ? routes.join(",") : "none (set PI_JEV_PHASE_*_MODEL)"}`,
         `currentModel=${ctx.model?.id ?? "unknown"}`,
         `lastPhase=${describeLastPhase()}`,
@@ -144,9 +155,12 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     }
   }
 
-  async function runVerification(apiKey: string, ctx: ExtensionContext): Promise<void> {
+  async function runVerification(
+    apiKey: string,
+    ctx: ExtensionContext,
+  ): Promise<VerifyResult | undefined> {
     const exchange = lastExchange(ctx);
-    if (!exchange) return;
+    if (!exchange) return undefined;
 
     try {
       const result = await verifyResponse(
@@ -165,6 +179,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
           "info",
         );
       }
+      return result;
     } catch (error) {
       // Verification is advisory; never let it affect the run.
       if (state.debug) {
@@ -173,12 +188,16 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
           "warning",
         );
       }
+      return undefined;
     }
   }
 
-  async function runPhaseJudgment(apiKey: string, ctx: ExtensionContext): Promise<void> {
+  async function runPhaseJudgment(
+    apiKey: string,
+    ctx: ExtensionContext,
+  ): Promise<{ judgment: PhaseJudgment; recommendedModel?: string } | undefined> {
     const turns = recentHistory(ctx, phaseConfig.historyTurns, "");
-    if (turns.length === 0) return;
+    if (turns.length === 0) return undefined;
 
     try {
       const judgment = await judgePhase(turns, apiKey, config, ctx.signal);
@@ -194,6 +213,9 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
           "info",
         );
       }
+      return recommendation?.model
+        ? { judgment, recommendedModel: recommendation.model }
+        : { judgment };
     } catch (error) {
       // Phase judgment is advisory; never let it affect the run.
       if (state.debug) {
@@ -202,21 +224,27 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
           "warning",
         );
       }
+      return undefined;
     }
   }
 
-  async function runTrajectoryJudgment(apiKey: string, ctx: ExtensionContext): Promise<void> {
+  async function runTrajectoryJudgment(
+    apiKey: string,
+    ctx: ExtensionContext,
+  ): Promise<{ judgment: TrajectoryJudgment; hint: boolean } | undefined> {
     const turns = recentHistory(ctx, trajectoryConfig.historyTurns, "");
-    if (turns.length === 0) return;
+    if (turns.length === 0) return undefined;
 
     try {
       const judgment = await judgeTrajectory(turns, apiKey, config, ctx.signal);
       lastTrajectory = judgment;
 
-      ctx.ui.setStatus(
-        COACHING_STATUS_KEY,
-        formatCoaching(judgment, state.footer, trajectoryConfig.trajectoryConfidenceThreshold),
+      const hint = formatCoaching(
+        judgment,
+        state.footer,
+        trajectoryConfig.trajectoryConfidenceThreshold,
       );
+      ctx.ui.setStatus(COACHING_STATUS_KEY, hint);
 
       if (state.debug) {
         ctx.ui.notify(
@@ -224,6 +252,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
           "info",
         );
       }
+      return { judgment, hint: hint !== undefined };
     } catch (error) {
       // Coaching is advisory; never let it affect the run.
       if (state.debug) {
@@ -232,6 +261,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
           "warning",
         );
       }
+      return undefined;
     }
   }
 
@@ -262,6 +292,8 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     delete event.systemPromptOptions.sections[POLICY_SECTION];
     delete event.systemPromptOptions.sections[PREMISE_SECTION];
 
+    pending = { at: new Date().toISOString() };
+
     if (!state.enabled || !event.prompt.trim()) return;
 
     const apiKey = await resolveApiKey(ctx);
@@ -286,6 +318,9 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         decision = await classifyWithJev(event.prompt, apiKey, config, ctx.signal, history);
         cache.set(cacheKey, decision);
       }
+
+      pending.mode = decision.mode;
+      pending.signals = decision.signals;
 
       if (state.debug) {
         ctx.ui.notify(`Jev route: ${formatDecision(decision)}`, "info");
@@ -333,14 +368,14 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     // Independent judgments, so run them concurrently: wall clock is the slowest,
     // not the sum. Each catches its own errors, but allSettled means an unexpected
     // throw in one cannot silently drop the others.
-    const judgments: Promise<void>[] = [];
-    if (state.verify) judgments.push(runVerification(apiKey, ctx));
-    if (state.phase) judgments.push(runPhaseJudgment(apiKey, ctx));
-    if (state.coaching) judgments.push(runTrajectoryJudgment(apiKey, ctx));
+    const [verification, phase, trajectory] = await Promise.allSettled([
+      state.verify ? runVerification(apiKey, ctx) : Promise.resolve(undefined),
+      state.phase ? runPhaseJudgment(apiKey, ctx) : Promise.resolve(undefined),
+      state.coaching ? runTrajectoryJudgment(apiKey, ctx) : Promise.resolve(undefined),
+    ]);
 
-    const settled = await Promise.allSettled(judgments);
     if (state.debug) {
-      for (const result of settled) {
+      for (const result of [verification, phase, trajectory]) {
         if (result.status === "rejected") {
           ctx.ui.notify(
             `Jev judgment rejected: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`,
@@ -349,6 +384,24 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         }
       }
     }
+
+    if (state.log) {
+      const record: DecisionRecord = pending ?? { at: new Date().toISOString() };
+      if (ctx.model?.id) record.modelRunning = ctx.model.id;
+      if (verification.status === "fulfilled" && verification.value) {
+        record.verify = verification.value;
+      }
+      if (phase.status === "fulfilled" && phase.value) {
+        record.phase = phase.value.judgment;
+        if (phase.value.recommendedModel) record.recommendedModel = phase.value.recommendedModel;
+      }
+      if (trajectory.status === "fulfilled" && trajectory.value) {
+        record.trajectory = trajectory.value.judgment;
+        record.coachingHint = trajectory.value.hint;
+      }
+      appendDecision(record);
+    }
+    pending = undefined;
   });
 }
 
