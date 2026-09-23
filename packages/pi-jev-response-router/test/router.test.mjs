@@ -5,12 +5,8 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { TtlCache } from "../dist/cache.js";
-import {
-  FOOTER_MODES,
-  loadPreferences,
-  preferencesPath,
-  savePreferences,
-} from "../dist/preferences.js";
+import { loadPreferences, preferencesPath, savePreferences } from "../dist/preferences.js";
+import { FOOTER_MODES } from "../dist/types.js";
 import piJevResponseRouter from "../dist/index.js";
 import { buildState } from "../dist/context.js";
 import {
@@ -18,6 +14,7 @@ import {
   composeMode,
   parseClassificationResponse,
   parseNoulAnswer,
+  parseScoreAnswer,
 } from "../dist/jev-client.js";
 import { policyFor } from "../dist/policies.js";
 import { formatVerifyStatus } from "../dist/verify.js";
@@ -133,7 +130,7 @@ test("classifyWithJev sends two noul questions and bounded history", async () =>
         verify: false,
         verifyEvasiveThreshold: 0.6,
         verifyAnswersThreshold: 0.35,
-        verifyTrickyThreshold: 0.6,
+        verifyObligationThreshold: 1.5,
       },
       undefined,
       [{ role: "user", text: "tell me about UDP" }],
@@ -169,11 +166,38 @@ test("TtlCache expires, evicts, and can be disabled", () => {
   assert.equal(disabled.get("a"), undefined);
 });
 
-test("formatVerifyStatus only flags vague or tricky", () => {
-  const base = { answersQuestion: 0.9, evasive: 0.1, tricky: 0.1 };
+test("formatVerifyStatus renders by footer mode and clears when ok", () => {
+  const base = { answersQuestion: 0.9, evasive: 0.1, obligationUnmet: 0.2 };
   assert.equal(formatVerifyStatus({ ...base, flag: "ok" }), undefined);
-  assert.match(formatVerifyStatus({ ...base, flag: "vague" }), /vagueness/);
-  assert.match(formatVerifyStatus({ ...base, flag: "tricky" }), /tricky/);
+  assert.equal(formatVerifyStatus({ ...base, flag: "evasive" }), "🤷 evasive");
+  assert.equal(formatVerifyStatus({ ...base, flag: "unmet" }), "🚩 unmet");
+  assert.equal(formatVerifyStatus({ ...base, flag: "evasive" }, "icons"), "🤷");
+  assert.equal(formatVerifyStatus({ ...base, flag: "unmet" }, "icons"), "🚩");
+  assert.equal(formatVerifyStatus({ ...base, flag: "unmet" }, "off"), undefined);
+});
+
+test("parseScoreAnswer returns the expected score and level probabilities", () => {
+  const parsed = parseScoreAnswer(
+    {
+      answers: {
+        obligation_unmet: {
+          type: "score",
+          score: 2.4,
+          confidence: 0.8,
+          legend: { 0: "a", 1: "b", 2: "c", 3: "d" },
+          probabilities: { 0: 0.1, 1: 0.1, 2: 0.2, 3: 0.6 },
+        },
+      },
+    },
+    "obligation_unmet",
+  );
+
+  assert.equal(parsed.score, 2.4);
+  assert.equal(parsed.probabilities["3"], 0.6);
+  assert.throws(
+    () => parseScoreAnswer({ answers: {} }, "obligation_unmet"),
+    /missing answers.obligation_unmet/,
+  );
 });
 
 function withAgentDir(run) {

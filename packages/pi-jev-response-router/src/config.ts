@@ -17,6 +17,10 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
 export function loadConfig(): RouterConfig {
   // PI_JEV_ROUTER_MIN_CONFIDENCE was the pre-0.2 knob. It was effectively a
   // no-op (confidence is in [0, 1] and the default was 0), so it now serves as
@@ -31,7 +35,7 @@ export function loadConfig(): RouterConfig {
     timeoutMs: Math.max(1, numberFromEnv("PI_JEV_ROUTER_TIMEOUT_MS", 5_000)),
     retries: Math.max(0, Math.floor(numberFromEnv("PI_JEV_ROUTER_RETRIES", 2))),
     decompositionThreshold: clamp01(
-      numberFromEnv("PI_JEV_ROUTER_DECOMPOSITION_THRESHOLD", legacyMinConfidence || 0.5),
+      numberFromEnv("PI_JEV_ROUTER_DECOMPOSITION_THRESHOLD", legacyMinConfidence || 0.6),
     ),
     boundedVerificationThreshold: clamp01(
       numberFromEnv("PI_JEV_ROUTER_BOUNDED_THRESHOLD", legacyMinConfidence || 0.6),
@@ -42,6 +46,10 @@ export function loadConfig(): RouterConfig {
     verify: boolFromEnv("PI_JEV_ROUTER_VERIFY", true),
     verifyEvasiveThreshold: clamp01(numberFromEnv("PI_JEV_ROUTER_VERIFY_EVASIVE_THRESHOLD", 0.6)),
     verifyAnswersThreshold: clamp01(numberFromEnv("PI_JEV_ROUTER_VERIFY_ANSWERS_THRESHOLD", 0.35)),
-    verifyTrickyThreshold: clamp01(numberFromEnv("PI_JEV_ROUTER_VERIFY_TRICKY_THRESHOLD", 0.6)),
+    verifyObligationThreshold: clamp(
+      numberFromEnv("PI_JEV_ROUTER_VERIFY_OBLIGATION_THRESHOLD", 1.5),
+      0,
+      3,
+    ),
   };
 }

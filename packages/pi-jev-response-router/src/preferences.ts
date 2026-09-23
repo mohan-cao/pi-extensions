@@ -3,8 +3,7 @@ import { dirname, join } from "node:path";
 
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
-export const FOOTER_MODES = ["compact", "icons", "off"] as const;
-export type FooterMode = (typeof FOOTER_MODES)[number];
+import { FOOTER_MODES, type FooterMode } from "./types.js";
 
 /**
  * Runtime toggles that survive `/reload` and new sessions.

@@ -1,25 +1,25 @@
-import { callSystemOne, parseNoulAnswer } from "./jev-client.js";
+import { callSystemOne, parseNoulAnswer, parseScoreAnswer } from "./jev-client.js";
 import {
   VERIFY_ANSWER_QUESTION,
   VERIFY_EVASIVE_QUESTION,
-  VERIFY_TRICKY_QUESTION,
+  VERIFY_OBLIGATION_QUESTION,
 } from "./prompt.js";
-import type { RouterConfig } from "./types.js";
+import type { FooterMode, RouterConfig } from "./types.js";
 
 const ANSWER_ID = "answers_question";
 const EVASIVE_ID = "evasive";
-const TRICKY_ID = "genuinely_tricky";
+const OBLIGATION_ID = "obligation_unmet";
 
-export type VerifyFlag = "ok" | "vague" | "tricky";
+export type VerifyFlag = "ok" | "evasive" | "unmet";
 
 export interface VerifyResult {
   flag: VerifyFlag;
-  /** P(the response directly answers the request). */
+  /** P(the response addresses the actual request). */
   answersQuestion: number;
-  /** P(the response is vague/hedged to avoid committing). */
+  /** P(the response avoids committing to a position the request calls for). */
   evasive: number;
-  /** P(the problem genuinely required decomposition). */
-  tricky: number;
+  /** Expected obligation failure, 0-3. Higher means the answer did less of what was needed. */
+  obligationUnmet: number;
   model?: string;
 }
 
@@ -39,7 +39,7 @@ export async function verifyResponse(
     {
       [ANSWER_ID]: VERIFY_ANSWER_QUESTION,
       [EVASIVE_ID]: VERIFY_EVASIVE_QUESTION,
-      [TRICKY_ID]: VERIFY_TRICKY_QUESTION,
+      [OBLIGATION_ID]: VERIFY_OBLIGATION_QUESTION,
     },
     apiKey,
     config,
@@ -48,27 +48,34 @@ export async function verifyResponse(
 
   const answersQuestion = parseNoulAnswer(payload, ANSWER_ID);
   const evasive = parseNoulAnswer(payload, EVASIVE_ID);
-  const tricky = parseNoulAnswer(payload, TRICKY_ID);
+  const obligationUnmet = parseScoreAnswer(payload, OBLIGATION_ID).score;
 
   let flag: VerifyFlag = "ok";
   if (evasive >= config.verifyEvasiveThreshold || answersQuestion <= config.verifyAnswersThreshold) {
-    flag = "vague";
-  } else if (tricky >= config.verifyTrickyThreshold) {
-    flag = "tricky";
+    flag = "evasive";
+  } else if (obligationUnmet >= config.verifyObligationThreshold) {
+    flag = "unmet";
   }
 
   return {
     flag,
     answersQuestion,
     evasive,
-    tricky,
+    obligationUnmet,
     ...(payload.model ? { model: payload.model } : {}),
   };
 }
 
-/** `undefined` clears the status indicator. */
-export function formatVerifyStatus(result: VerifyResult): string | undefined {
-  if (result.flag === "vague") return "💡 possible vagueness";
-  if (result.flag === "tricky") return "💡 genuinely tricky";
-  return undefined;
+/**
+ * `undefined` clears the status indicator. `off` renders nothing; `icons`
+ * renders the glyph alone; `compact` (the default) adds the label.
+ */
+export function formatVerifyStatus(
+  result: VerifyResult,
+  mode: FooterMode = "compact",
+): string | undefined {
+  if (mode === "off" || result.flag === "ok") return undefined;
+
+  const glyph = result.flag === "evasive" ? "🤷" : "🚩";
+  return mode === "icons" ? glyph : `${glyph} ${result.flag}`;
 }
