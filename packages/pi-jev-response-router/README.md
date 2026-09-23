@@ -61,27 +61,37 @@ The footer preference selects the rendering: `compact` (icon + label, default),
 This is **verify-only**: it never retries or rewrites the answer. Retry is
 deliberately out of scope for now.
 
-### Phase recommendation (shadow)
+### Two independent footer signals
 
-When routes are configured, a post-generation judgment reports what phase the work is moving
-into, and whether the conversation is stuck. The footer nudges only when the running model is
-known to serve a different phase:
+Both run after generation, in parallel with verification. They are separate features with
+separate toggles, because they are **orthogonal** — you can be stuck while implementing, or
+framing a problem badly during general conversation.
+
+**Model nudge** (`/jev-router phase on|off`) — what kind of work is next, and whether your
+running model suits it:
 
 - `↪ build · <model>` — the work moved; switch when you want to
+
+Fires only when the running model is *known* to serve a different phase; an unmapped model
+yields no nudge. It **never switches models and never blocks a prompt** — switch with `/model`,
+and the nudge clears itself. Inert without routes configured.
+
+**Coaching hint** (`/jev-router coaching on|off`) — is this conversation progressing?
+
 - `♾️ paralysis` — analysis paralysis; consider zooming out
 - `🖼️ framing` — the framing is the blocker, not the effort
 
-It **never switches models and never blocks a prompt**. Switch with `/model`; the nudge clears
-itself once you do. Without routes configured the feature is inert.
+Display-only. It never gates the model nudge and never changes routing.
 
 | Environment variable | Default | Meaning |
 | --- | --- | --- |
 | `PI_JEV_PHASE_BUILD_MODEL` | unset | Model that serves the `build` phase |
 | `PI_JEV_PHASE_DESIGN_MODEL` | unset | Model that serves the `design` phase |
 | `PI_JEV_PHASE_GENERAL_MODEL` | unset | Model that serves the `general` phase |
-| `PI_JEV_PHASE_CONFIDENCE_THRESHOLD` | `0.7` | Minimum Choice confidence before a routing nudge |
-| `PI_JEV_TRAJECTORY_THRESHOLD` | `0.7` | Minimum confidence before a stuck-pattern hint |
+| `PI_JEV_PHASE_CONFIDENCE_THRESHOLD` | `0.7` | Minimum confidence before a model nudge |
 | `PI_JEV_PHASE_HISTORY_TURNS` | `8` | Conversation turns supplied to the phase judge |
+| `PI_JEV_TRAJECTORY_THRESHOLD` | `0.7` | Minimum confidence before a coaching hint |
+| `PI_JEV_TRAJECTORY_HISTORY_TURNS` | `8` | Conversation turns supplied to the trajectory judge |
 
 ### Install from npm
 
@@ -106,6 +116,8 @@ You can also provide `TYPESAFE_API_KEY` in the environment. An explicitly stored
 /jev-router verify off
 /jev-router phase on
 /jev-router phase off
+/jev-router coaching on
+/jev-router coaching off
 /jev-router debug on
 /jev-router debug off
 /jev-router footer compact

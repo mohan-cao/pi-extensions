@@ -8,6 +8,7 @@ export interface RouterState {
   debug: boolean;
   verify: boolean;
   phase: boolean;
+  coaching: boolean;
   footer: FooterMode;
 }
 
@@ -33,6 +34,7 @@ const TOGGLE_LABEL = {
   debug: "Jev response router debug notifications",
   verify: "Jev post-generation verification",
   phase: "Jev phase recommendation",
+  coaching: "Jev coaching hint",
 } as const;
 
 function booleanToggle(value: string): boolean | undefined {
@@ -61,7 +63,7 @@ function toggle(
 
 const statusCommand: RouterCommand = {
   usage: "status",
-  description: "show state, config, and the last phase judgment",
+  description: "show state, config, and the last judgments",
   run: (deps, _rest, ctx) => deps.reportStatus(ctx),
 };
 
@@ -117,8 +119,16 @@ const COMMANDS = new Map<string, RouterCommand>([
     "phase",
     {
       usage: "phase on|off",
-      description: "toggle the shadow phase recommendation",
+      description: "toggle the model nudge (work phase vs running model)",
       run: (deps, rest, ctx) => toggle(deps, "phase", rest, ctx),
+    },
+  ],
+  [
+    "coaching",
+    {
+      usage: "coaching on|off",
+      description: "toggle the stuck-conversation hint",
+      run: (deps, rest, ctx) => toggle(deps, "coaching", rest, ctx),
     },
   ],
   [

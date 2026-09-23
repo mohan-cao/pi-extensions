@@ -170,6 +170,23 @@ correlated with `next_phase == build` (0.91–0.93 when build, ≤ 0.09 otherwis
 changed no label and no confidence. A restatement cannot corroborate anything, which was its
 entire purpose.
 
+### The two judgments are separate calls
+
+`next_phase` and `trajectory` are orthogonal — a conversation can be stuck while implementing,
+or framing a problem badly during general conversation — so they run as separate calls, with
+separate toggles (`/jev-router phase`, `/jev-router coaching`), separate thresholds, and
+separate history depths. Sharing a call gives questions a way to perturb each other, which
+`implementation_ready` demonstrated.
+
+They run concurrently with verification in `agent_settled` (`Promise.allSettled`), so the wall
+clock is the slowest judgment rather than the sum.
+
+`stuck_detail` was also tightened to require *escalation or repetition* rather than mere
+unresolvedness. On the eval that moved `design-open` from `stuck_detail` (0.29–0.32) to
+`converging` (0.45–0.52), while both genuine stuck cases stayed above the gate — at
+**0.80–0.82** and **0.87**, down from 0.95–0.96 and 1.00. Less headroom, but the systematic
+mislabel is gone.
+
 ## Trajectory diagnosis (coaching)
 
 Phase answers *what kind of work this is*. It does not answer *whether the work is going

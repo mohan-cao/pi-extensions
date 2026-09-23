@@ -120,7 +120,7 @@ export const TRAJECTORY_QUESTION: ChoiceQuestionSpec = {
     converging:
       "Each turn covers new ground and resolves something. The conversation is moving toward a conclusion or decision.",
     stuck_detail:
-      "Turns keep going deeper into detail without resolving anything or reaching a decision.",
+      "Turns keep escalating into finer detail on the same question, revisiting ground already covered, without resolving it or reaching a decision.",
     stuck_framing:
       "Turns revisit the same issue in different words. Progress is blocked by how the problem is framed, not by missing effort.",
     early: "Too few turns, or too little substance, to judge progress.",

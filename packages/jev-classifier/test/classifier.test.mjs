@@ -11,6 +11,8 @@ import {
   formatCoaching,
   formatPhaseNudge,
   formatVerifyStatus,
+  judgePhase,
+  judgeTrajectory,
   parseChoiceAnswer,
   parseClassificationResponse,
   parseNoulAnswer,
@@ -23,6 +25,22 @@ import {
 const thresholds = {
   decompositionThreshold: 0.6,
   boundedVerificationThreshold: 0.6,
+};
+
+const routerConfig = {
+  endpoint: "https://api.typesafe.ai/v1/systemone",
+  model: "jev-latest",
+  timeoutMs: 1000,
+  retries: 0,
+  ...thresholds,
+  premiseDefectThreshold: 2.8,
+  historyTurns: 4,
+  cacheTtlMs: 0,
+  cacheMaxEntries: 0,
+  verify: false,
+  verifyEvasiveThreshold: 0.6,
+  verifyAnswersThreshold: 0.35,
+  verifyObligationThreshold: 1.5,
 };
 
 function noulResponse(decomposition, boundedVerification, premiseDefect = 0, model = "jev-1.13.0") {
@@ -222,6 +240,51 @@ test("formatVerifyStatus renders by footer mode and clears when ok", () => {
 
 test("footer modes are the documented set", () => {
   assert.deepEqual([...FOOTER_MODES], ["compact", "icons", "off"]);
+});
+
+test("judgePhase and judgeTrajectory each send only their own question", async () => {
+  const originalFetch = globalThis.fetch;
+  const questionsSeen = [];
+
+  globalThis.fetch = async (_url, init) => {
+    questionsSeen.push(Object.keys(JSON.parse(init.body).questions));
+    return new Response(
+      JSON.stringify({
+        model: "jev-1.13.0",
+        answers: {
+          next_phase: {
+            type: "choice",
+            choice: "build",
+            confidence: 0.9,
+            probabilities: { build: 0.9 },
+          },
+          trajectory: {
+            type: "choice",
+            choice: "converging",
+            confidence: 0.9,
+            probabilities: { converging: 0.9 },
+          },
+        },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  try {
+    const phase = await judgePhase([{ role: "user", text: "hi" }], "k", routerConfig);
+    const trajectory = await judgeTrajectory([{ role: "user", text: "hi" }], "k", routerConfig);
+
+    assert.equal(phase.phase, "build");
+    assert.equal(phase.trajectory, undefined);
+    assert.equal(trajectory.trajectory, "converging");
+    assert.equal(trajectory.phase, undefined);
+
+    // The whole point of the split: neither call asks the other's question.
+    assert.deepEqual(questionsSeen[0], ["next_phase"]);
+    assert.deepEqual(questionsSeen[1], ["trajectory"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 const phaseConfig = {
