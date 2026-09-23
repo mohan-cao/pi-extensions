@@ -5,15 +5,9 @@ import { loadConfig } from "./config.js";
 import { lastExchange, recentHistory } from "./context.js";
 import { classifyWithJev } from "./jev-client.js";
 import { policyFor } from "./policies.js";
-import {
-  FOOTER_MODES,
-  loadPreferences,
-  preferencesPath,
-  savePreferences,
-  type FooterMode,
-} from "./preferences.js";
+import { loadPreferences, preferencesPath, savePreferences } from "./preferences.js";
 import { JEV_PROVIDER_ID, registerJevAuthProvider } from "./provider.js";
-import type { ClassificationResult } from "./types.js";
+import { FOOTER_MODES, type ClassificationResult, type FooterMode } from "./types.js";
 import { formatVerifyStatus, verifyResponse } from "./verify.js";
 
 /** System-prompt section key. Pi wraps the value in a tag of the same name. */
@@ -253,11 +247,11 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         ctx.signal,
       );
 
-      ctx.ui.setStatus(VERIFY_STATUS_KEY, formatVerifyStatus(result));
+      ctx.ui.setStatus(VERIFY_STATUS_KEY, formatVerifyStatus(result, footer));
 
       if (debug) {
         ctx.ui.notify(
-          `Jev verify: ${result.flag} (answers=${result.answersQuestion.toFixed(2)}, evasive=${result.evasive.toFixed(2)}, tricky=${result.tricky.toFixed(2)})`,
+          `Jev verify: ${result.flag} (answers=${result.answersQuestion.toFixed(2)}, evasive=${result.evasive.toFixed(2)}, obligation=${result.obligationUnmet.toFixed(2)})`,
           "info",
         );
       }
@@ -273,16 +267,22 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
   });
 }
 
-export { classifyWithJev, parseClassificationResponse, parseNoulAnswer } from "./jev-client.js";
+export {
+  classifyWithJev,
+  parseClassificationResponse,
+  parseNoulAnswer,
+  parseScoreAnswer,
+} from "./jev-client.js";
 export { policyFor } from "./policies.js";
 export { verifyResponse, formatVerifyStatus } from "./verify.js";
 export { TtlCache } from "./cache.js";
-export {
-  FOOTER_MODES,
-  loadPreferences,
-  preferencesPath,
-  savePreferences,
-} from "./preferences.js";
-export type { FooterMode, Preferences } from "./preferences.js";
-export type { ClassificationResult, ResponseMode, RouterConfig } from "./types.js";
+export { loadPreferences, preferencesPath, savePreferences } from "./preferences.js";
+export type { Preferences } from "./preferences.js";
+export { FOOTER_MODES } from "./types.js";
+export type {
+  ClassificationResult,
+  FooterMode,
+  ResponseMode,
+  RouterConfig,
+} from "./types.js";
 export type { VerifyResult, VerifyFlag } from "./verify.js";

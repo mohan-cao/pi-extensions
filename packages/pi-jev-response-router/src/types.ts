@@ -6,6 +6,9 @@ export const RESPONSE_MODES = [
 
 export type ResponseMode = (typeof RESPONSE_MODES)[number];
 
+export const FOOTER_MODES = ["compact", "icons", "off"] as const;
+export type FooterMode = (typeof FOOTER_MODES)[number];
+
 /** Raw Jev signals that drive the composed decision, each in [0, 1]. */
 export interface ClassificationSignals {
   /** P(the request requires decomposition before a reliable answer). */
@@ -42,7 +45,8 @@ export interface RouterConfig {
   verify: boolean;
   verifyEvasiveThreshold: number;
   verifyAnswersThreshold: number;
-  verifyTrickyThreshold: number;
+  /** Expected obligation failure (0-3) at or above which the answer is flagged. */
+  verifyObligationThreshold: number;
 }
 
 export interface JevNoulAnswer {

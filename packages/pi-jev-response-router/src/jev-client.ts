@@ -7,6 +7,7 @@ import {
 import {
   type ClassificationResult,
   type JevNoulAnswer,
+  type JevScoreAnswer,
   type JevSystemOneResponse,
   type ResponseMode,
   type RouterConfig,
@@ -138,6 +139,32 @@ export function parseNoulAnswer(payload: JevSystemOneResponse, id: string): numb
     throw new JevError(`Jev noul answer ${id} is missing a numeric value`);
   }
   return clamp01(answer.noul);
+}
+
+export interface ScoreValue {
+  /** Expected score: the probability-weighted average of the rubric levels. */
+  score: number;
+  /** Probability of each rubric level, keyed by level index. */
+  probabilities: Record<string, number>;
+}
+
+export function parseScoreAnswer(payload: JevSystemOneResponse, id: string): ScoreValue {
+  const raw = payload.answers?.[id];
+  if (!raw || typeof raw !== "object") {
+    throw new JevError(`Jev response is missing answers.${id}`);
+  }
+
+  const answer = raw as Partial<JevScoreAnswer> & { type?: unknown };
+  if (answer.type !== "score") {
+    throw new JevError(`Expected a score answer for ${id}, got ${String(answer.type)}`);
+  }
+  if (typeof answer.score !== "number" || !Number.isFinite(answer.score)) {
+    throw new JevError(`Jev score answer ${id} is missing a numeric value`);
+  }
+  if (!answer.probabilities || typeof answer.probabilities !== "object") {
+    throw new JevError(`Jev score answer ${id} is missing probabilities`);
+  }
+  return { score: answer.score, probabilities: answer.probabilities };
 }
 
 /** Decomposition takes precedence; `normal` is the residual, never a competitor. */

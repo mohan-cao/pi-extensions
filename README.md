@@ -40,12 +40,16 @@ on every mode change, i.e. a full cache miss.)
 
 ### Verification (signal only)
 
-After a run settles, the final answer is sent back to Jev for three Noul
-judgments: does it answer the request, is it vague/hedged, and is the problem
-genuinely tricky. The result is surfaced as a footer status:
+After a run settles, the final answer is sent back to Jev: does it address the
+request, does it avoid committing where a position was called for, and did it
+meet its obligation — correcting a false premise or surfacing the inputs the
+answer actually depends on. The result is surfaced as a footer status:
 
-- `💡 possible vagueness` — evasive or unresponsive answer
-- `💡 genuinely tricky` — the problem probably needed decomposition
+- `🤷 evasive` — the answer dodged or did not commit
+- `🚩 unmet` — technically true but it did not do the required work
+
+The footer preference selects the rendering: `compact` (icon + label, default),
+`icons` (glyph only), or `off`.
 
 This is **verify-only**: it never retries or rewrites the answer. Retry is
 deliberately out of scope for now.
@@ -93,15 +97,15 @@ All configuration is optional:
 | `PI_JEV_MODEL` | `jev-latest` | Jev model selector |
 | `PI_JEV_ROUTER_TIMEOUT_MS` | `5000` | Per-request HTTP timeout |
 | `PI_JEV_ROUTER_RETRIES` | `2` | Retries for HTTP 429/529 |
-| `PI_JEV_ROUTER_DECOMPOSITION_THRESHOLD` | `0.5` | P(decomposition) at or above which decomposition wins |
+| `PI_JEV_ROUTER_DECOMPOSITION_THRESHOLD` | `0.6` | P(decomposition) at or above which decomposition wins |
 | `PI_JEV_ROUTER_BOUNDED_THRESHOLD` | `0.6` | P(bounded verification) at or above which bounded verification wins |
 | `PI_JEV_ROUTER_HISTORY_TURNS` | `4` | Prior turns included in Jev state (0 disables) |
 | `PI_JEV_ROUTER_CACHE_TTL_MS` | `300000` | Classification cache TTL (0 disables) |
 | `PI_JEV_ROUTER_CACHE_MAX` | `64` | Classification cache entry cap |
 | `PI_JEV_ROUTER_VERIFY` | `true` | Post-generation verification on by default |
-| `PI_JEV_ROUTER_VERIFY_EVASIVE_THRESHOLD` | `0.6` | P(evasive) at or above which to flag vagueness |
-| `PI_JEV_ROUTER_VERIFY_ANSWERS_THRESHOLD` | `0.35` | P(answers the request) at or below which to flag vagueness |
-| `PI_JEV_ROUTER_VERIFY_TRICKY_THRESHOLD` | `0.6` | P(genuinely tricky) at or above which to flag |
+| `PI_JEV_ROUTER_VERIFY_EVASIVE_THRESHOLD` | `0.6` | P(evasive) at or above which to flag the answer as evasive |
+| `PI_JEV_ROUTER_VERIFY_ANSWERS_THRESHOLD` | `0.35` | P(answers the request) at or below which to flag the answer as evasive |
+| `PI_JEV_ROUTER_VERIFY_OBLIGATION_THRESHOLD` | `1.5` | Expected obligation failure (0-3) at or above which to flag the answer as unmet |
 
 `PI_JEV_ROUTER_MIN_CONFIDENCE` is deprecated. In `0.1.x` it was effectively a
 no-op (confidence is in `[0, 1]` and the default was `0`). It now serves as a
