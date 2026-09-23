@@ -443,3 +443,25 @@ Kept here so they are not re-proposed.
 - Where should the last judgment live if trend tracking is added — session `custom` entry
   (survives reload, may be summarised by compaction) vs extension memory (lost on reload)?
   Only needed if "stuck" ships.
+
+## Future work: the decision log
+
+Not implemented. The feature shows a nudge and then forgets it — nothing records what it said
+or whether it was right. Three consequences:
+
+- **Accuracy is unmeasurable.** The nudge appears, the user switches or ignores it, nothing
+  remembers. "Was this useful?" has no answer.
+- **Thresholds cannot be tuned from real usage.** The current numbers came from eight
+  hand-written eval cases. Real conversations will cover cases those eight do not.
+- **The success criterion above is untestable.** If the signal only tracks model verbosity,
+  the feature should not ship — but that needs data.
+
+Shape: one JSON line appended per settled turn, to a local file.
+
+```text
+{ "time": "...", "phase": "build", "confidence": 0.92, "ready": 0.93,
+  "stuck": "converging", "model_running": "design-model", "hint": "↪ build · build-model" }
+```
+
+A pluggable sink in the core, a file writer plus `/jev-router log on|off` in the Pi package.
+It records judgements, not conversation text, and should be opt-in and local.
