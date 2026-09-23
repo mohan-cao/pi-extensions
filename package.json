@@ -16,7 +16,7 @@
     "build:unchecked": "pnpm -r build:unchecked",
     "test": "pnpm -r test",
     "pack:router": "node ./scripts/pack-router.mjs",
-    "publish:router": "npm publish ./packages/pi-jev-response-router --access public"
+    "publish:router": "pnpm --filter @mohan-cao/pi-jev-response-router publish --access public"
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "0.86.0",

@@ -57,6 +57,21 @@ jobs:
       - run: pnpm --filter "${{ steps.pkg.outputs.name }}..." build
       - run: pnpm --filter "${{ steps.pkg.outputs.name }}..." --if-present test
 
-      # npm (not pnpm) performs the publish so trusted publishing/OIDC works.
-      # `prepack` rebuilds the package; provenance is generated automatically.
-      - run: npm publish "./${{ steps.pkg.outputs.dir }}" --access public
+      # `npm publish` ships the `workspace:` protocol verbatim, and no npm
+      # consumer can resolve it (EUNSUPPORTEDPROTOCOL). `pnpm pack` rewrites it to
+      # a concrete range, so pack with pnpm and publish the tarball with npm —
+      # keeping the trusted-publishing OIDC flow, which npm's publish provides.
+      - name: Pack
+        run: pnpm --filter "${{ steps.pkg.outputs.name }}" pack --pack-destination "$RUNNER_TEMP"
+
+      # Fail closed: shipping an unresolvable range is worse than not shipping.
+      - name: Verify the workspace protocol was rewritten
+        run: |
+          tarball="$(ls "$RUNNER_TEMP"/*.tgz | head -1)"
+          if tar -xzOf "$tarball" package/package.json | grep -q '"workspace:'; then
+            echo "::error::packed manifest still contains a workspace: range"
+            exit 1
+          fi
+
+      - name: Publish
+        run: npm publish "$RUNNER_TEMP"/*.tgz --access public
