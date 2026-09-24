@@ -1,4 +1,5 @@
-import { type JevConfig, type TrajectoryConfig } from "@mohan-cao/jev-classifier";
+import type { JevConfig } from "@mohan-cao/jev-classifier";
+import type { TrajectoryConfig } from "@mohan-cao/jev-trajectory";
 import type { ClassifyConfig } from "@mohan-cao/jev-classify";
 import type { VerifyConfig } from "@mohan-cao/jev-verify";
 import { PHASES, type Phase, type PhaseConfig } from "@mohan-cao/jev-phase";
@@ -130,10 +131,20 @@ export function loadPhaseConfig(overrides?: Partial<Record<Phase, string>>): Pha
   };
 }
 
-/** Independent of phase: coaching is about the process, not the work's kind. */
-export function loadTrajectoryConfig(): TrajectoryConfig {
+/**
+ * Independent of phase: progress is about the process, not the work's kind.
+ *
+ * The threshold is a gate on the *judgment's* confidence, not on the ratio: a
+ * turn below it is excluded from the tally rather than counted as `held`.
+ */
+export function loadTrajectoryConfig(jev: JevConfig): TrajectoryConfig {
   return {
-    trajectoryConfidenceThreshold: clamp(numberFromEnv("PI_JEV_TRAJECTORY_THRESHOLD", 0.7), 0, 1),
+    ...jev,
+    progressConfidenceThreshold: clamp(
+      numberFromEnv("PI_JEV_TRAJECTORY_THRESHOLD", 0.7),
+      0,
+      1,
+    ),
     historyTurns: Math.max(0, Math.floor(numberFromEnv("PI_JEV_TRAJECTORY_HISTORY_TURNS", 8))),
   };
 }

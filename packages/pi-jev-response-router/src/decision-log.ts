@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 import type { ClassificationSignals, ResponseMode } from "@mohan-cao/jev-classify";
-import type { TrajectoryJudgment } from "@mohan-cao/jev-classifier";
+import type { TrajectoryJudgment } from "@mohan-cao/jev-trajectory";
 import type { PhaseJudgment } from "@mohan-cao/jev-phase";
 import type { VerifyResult } from "@mohan-cao/jev-verify";
 
@@ -39,8 +39,12 @@ export interface DecisionRecord {
   /** The model the nudge recommended, when one fired. */
   recommendedModel?: string;
   trajectory?: TrajectoryJudgment;
-  /** Whether a coaching hint was actually rendered. */
-  coachingHint?: boolean;
+  /**
+   * The running tally at this turn: turns that advanced, out of turns that
+   * counted. Recorded rather than the rendered string, so the series can be
+   * re-derived without the host.
+   */
+  progress?: { advanced: number; total: number };
 }
 
 /** e.g. `~/.pi/agent/jev-decisions.jsonl`, honoring PI_CODING_AGENT_DIR. */

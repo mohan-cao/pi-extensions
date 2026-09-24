@@ -45,6 +45,7 @@
     "@mohan-cao/jev-classifier": "workspace:^",
     "@mohan-cao/jev-classify": "workspace:^",
     "@mohan-cao/jev-phase": "workspace:^",
+    "@mohan-cao/jev-trajectory": "workspace:^",
     "@mohan-cao/jev-verify": "workspace:^"
   },
   "scripts": {

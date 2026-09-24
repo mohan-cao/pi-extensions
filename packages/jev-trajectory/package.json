@@ -1,0 +1,47 @@
+{
+  "name": "@mohan-cao/jev-trajectory",
+  "version": "0.1.0",
+  "description": "Jev progress signal: one signed per-turn judgment of whether the work advanced, held, or was reopened.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mohan-cao/pi-extensions.git",
+    "directory": "packages/jev-trajectory"
+  },
+  "keywords": [
+    "jev",
+    "typesafe-ai",
+    "system-one",
+    "classifier",
+    "llm"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "build:unchecked": "tsc -p tsconfig.json --noCheck",
+    "test": "node --test test/*.test.mjs",
+    "prepack": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@mohan-cao/jev-classifier": "workspace:^"
+  }
+}
