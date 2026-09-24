@@ -123,17 +123,27 @@ document forbids.
 
 #### What is measured instead
 
-One signed judgment per turn, from a single Choice question:
+**Two orthogonal Noul questions per turn, composed in code:**
 
-| judgment | means |
-| --- | --- |
-| `advanced` | the turn settled something, moved the work forward, or converged on agreement |
-| `held` | neither advanced nor revisited — a clarifying question, an agreed scope, waiting |
-| `regressed` | the turn reopened or undid something |
+| `advance?` | `regress?` | outcome |
+| --- | --- | --- |
+| no | no | `held` |
+| yes | no | `advanced` |
+| no | yes | `regressed` |
+| yes | yes | `mixed` |
 
-**Phase-agnostic on purpose.** The same judgment reads correctly in build as in
-design: "X versus Y, and we agreed on Y" is `advanced` just as much as a newly
-settled detail is. Naming a phase inside the question would make it answer
+The four outcomes exist because **a turn can genuinely do both** — settle the API
+shape and reopen the storage choice — and a single axis cannot say so. That is the
+same argument that gave classification two Nouls instead of one Choice: a single
+axis makes the residual compete in an argmax, and here it would silently pick one
+of two true things.
+
+`mixed` is not a failure state. Neither is `regressed`: reopening a detail that
+rested on a false premise is how a wrong premise gets caught.
+
+**Phase-agnostic on purpose.** The same answers read correctly in build as in
+design: "X versus Y, and we agreed on Y" advances the work just as much as a newly
+settled detail does. Naming a phase inside the question would make it answer
 differently per phase for no gain, and the phase indicator supplies that framing
 when it is shown alongside.
 
@@ -141,21 +151,41 @@ The series is then aggregated by the host, as arithmetic:
 
 | aggregate | reading |
 | --- | --- |
-| net direction | mean of the −1/0/+1 series. Positive means progressing, *even with much still open* |
-| oscillation | sign changes. A framing loop shows up here, not as a category |
-| longest non-advancing streak | the honest version of "stuck": no net progress for N turns, stated as a fact |
-| spread | proportion `regressed`. High `regressed` *with* high `advanced` is a healthy correction cycle; `regressed` with nothing advancing is a spiral |
+| `net` | mean of the −1/0/+1 series, with `mixed` cancelling to zero. Positive means progressing, *even with much still open* |
+| `oscillation` | direction reversals. `held` and `mixed` are pauses, not reversals |
+| `longestStall` | longest run that did not net forward. `mixed` counts, because a run of mixed turns keeps changing things without netting forward |
+| `advancedRate`, `regressedRate` | **marginals**, so they overlap on `mixed` and can sum past 1. The gap between `mixedRate` and what independence would predict is the interesting part |
 
 Percentiles and variance are deliberately absent: over a window this short they
-are noise, and over a signed series spread is nearly redundant with the
+are noise, and over a three-valued series spread is nearly redundant with the
 proportions.
+
+#### A finer scale was considered and rejected
+
+A five-point ordinal — `advanced | refined | held | degraded | regressed` — was
+proposed. It fails on its own terms:
+
+- **`refined` is a kind, not a degree.** "Covered new ground" versus "improved
+  what exists" is a different axis from direction, and a kind cannot live on a
+  line. Putting it there is the same error the categorical version made.
+- **`degraded` is not separable from `regressed`.** Both are "something got
+  worse", and a judge asked to choose between them would be guessing.
+- **A third question in the same call perturbs the others.** This codebase already
+  paid for that lesson: `implementation_ready` was removed precisely because
+  sharing a call let it flip another answer. Adding a third Noul is the opposite
+  of what that says.
+
+If "refining forever without advancing" turns out to be a pattern worth
+observing, the answer is a **third orthogonal question** — not two more points on
+a line — and it should be justified by the sweep rather than by argument.
 
 #### The window is a tally, not a window
 
 Both numbers accumulate from the last **state transition** and reset to `0/0`
 there — a phase change starts a new trajectory, because the thing being measured
 is how *this stretch* of work is going, not the session as a whole. The
-denominator grows every turn; the numerator grows on `advanced`.
+denominator grows every turn; the numerator grows on any turn where something
+advanced.
 
 The consequence worth knowing: **sensitivity falls as the stretch lengthens.** A
 three-turn spiral inside a forty-turn segment barely moves the ratio. If that
