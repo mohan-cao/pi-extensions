@@ -1,6 +1,6 @@
 {
   "name": "@mohan-cao/jev-phase",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Jev phase signal: what kind of work a conversation needs next, reported as an indicator.",
   "type": "module",
   "license": "Apache-2.0",

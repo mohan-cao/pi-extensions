@@ -1,6 +1,6 @@
 {
   "name": "@mohan-cao/jev-verify",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Jev verification signal: did a completed response address the request, evade it, or miss its obligation.",
   "type": "module",
   "license": "Apache-2.0",
