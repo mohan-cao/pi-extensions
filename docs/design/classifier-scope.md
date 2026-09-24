@@ -31,6 +31,18 @@ should be replaced.
 Observes whether the answer addressed the question. The user would have to
 re-read the exchange to see this, and re-reading is exactly what nobody does.
 
+**Known too permissive.** The `🚩 unmet` gate has produced a real false negative.
+Across a session containing demonstrably unverified assertions — a
+ trusted-publisher claim asserted without reading the npm configuration, and a
+"monorepo tooling is incompatible" verdict drawn from one issue title that was
+later closed as a misconfiguration — **every turn reported `ok`**. The obligation
+check did not notice that the answers were overreaching.
+
+That is the first production evidence any signal here has produced, and it points
+the opposite way from the trajectory hint: verify needs to be **less** permissive.
+The gate is an expected score of 1.5 on a 0–3 scale, and the failure mode is that
+confident, well-formed prose clears it whether or not the claims were checked.
+
 ### Keep — phase, as an indicator
 
 Observes where the work currently sits (`build` / `design` / `general`).
@@ -77,9 +89,31 @@ consume an order of magnitude more than a single prompt, and the binding
 constraint on a subscription is the *weekly* bar, not the session window — a
 number nobody tracks mid-flow.
 
-Reserved, not dropped: the cost model needs its own design pass. The gate is that
-subscription allowances are not in Pi's model registry, so the allowance has to
-be user-declared, and that surface needs thought before any of it is built.
+Reserved, not dropped: the cost model needs its own design pass.
+
+**Prior art worth reusing.** `@narumitw/pi-usage` already normalises exactly this
+data. Its `UsageReport` carries `buckets` of `{used, remaining, limit, unit,
+period, windowMinutes, resetsAt}` plus a `semantics.kind` of
+`consumer-subscription | api-key | project` — precisely the distinction that
+makes a per-turn fraction meaningful. Two consequences:
+
+- For **subscription** providers, cost per turn is the **delta of `used` across
+turns** as a fraction of the window. That is the heuristic proposed during
+design, computed rather than estimated, and it needs no pricing data at all.
+- For **API-key** providers it does not work: DeepSeek's endpoint reports a
+balance only, with no windows or account totals, so per-turn cost has to come
+from token counts × Pi's `Model.cost`.
+
+**It cannot be consumed as a dependency today.** `@narumitw/pi-usage` declares no
+`main`, `module`, `exports`, or `types`, so `import` fails with
+`ERR_MODULE_NOT_FOUND`; its only entry is `pi.extensions → ./dist/index.ts`. A
+deep import of that file is refused by Node
+(`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), and its versioned interop
+protocols are credential-related, not usage-related. There is no sanctioned seam.
+
+So a **user-declared allowance is the fail-open baseline**, and pi-usage
+integration is a later enhancement. The upstream ask is small and worth making —
+an `exports` field, or a usage-data protocol — but do not block on it.
 
 ### Dropped — model recommendation
 
@@ -165,17 +199,34 @@ deleting it:
    Avoid `*-tools` / `*-dev-*` — they promise a toolkit, and this is a set of
    observations. Component packages are unproblematic: `jev-verify`,
    `jev-phase`, `jev-trajectory`, `jev-cost`.
-2. **Migration.** Do not rename `pi-jev-response-router`. Retire it when the
-   collection package lands, and let the rename and the split be one migration
-   rather than two. Cost: a new trusted-publisher entry, a manual first publish,
-   and a `npm deprecate` on the old name.
-3. **Default on/off per component.** Phase is default on. Verification is cheap
-   and default on. The cost signal may be noisy enough to warrant opt-in.
+2. **Migration.** Deferred to last. Do not rename `pi-jev-response-router`;
+   retire it when the collection package lands, so the rename and the split are
+   one migration rather than two. The npm-side steps are manual either way — a
+   new trusted-publisher entry and a first publish that cannot use OIDC — and are
+   best done once the names are settled.
+3. **Default on/off per component.** Resolved: **all opt-out.** Ballooning LLM
+   spend is not a niche concern — only the very well funded are indifferent to
+   it, and software is a cost centre nearly everywhere. A signal that has to be
+   discovered and enabled is a signal nobody uses.
 4. **The coaching hint's precision target.** Decide what "right when it fires"
    means *before* measuring, or the measurement will be fitted to whatever the
    first few firings look like.
 5. **The cost model's allowance surface.** Deferred, but the gate: subscriptions
    are not in Pi's registry, so the allowance must be user-declared.
+
+## Sequencing
+
+Split first, tune second.
+
+`jev-phase` is the pilot — not because it is the simplest component, but because
+it is the one with a stated consumer and a downstream dependency: it is the
+grouping key the cost signal needs, and extracting it forces the core/component
+boundary to be defined for real. Whether the remaining three splits are
+mechanical or exploratory is decided by that first one.
+
+Thresholds are tuned afterwards, against data. One exception: the `🚩 unmet` gate
+already has a concrete false negative to answer, so it does not need to wait for
+more.
 
 ## Not in scope
 
