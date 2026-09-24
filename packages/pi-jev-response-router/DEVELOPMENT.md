@@ -132,6 +132,45 @@ Because `pi-jev-response-router` depends on `jev-classifier`, publish the core
 first — otherwise the extension installs against a version that is not on the
 registry yet.
 
+That order is **derived from the workspace graph**, not transcribed: `node
+scripts/check-versions.mjs` reads the packages from pnpm and sorts them
+`workspace:` dependency first, so adding a package needs no change here. (It is
+also what `pnpm -r build` already does — `pnpm -r run` is topologically sorted by
+default.)
+
+Run it before tagging:
+
+```bash
+node scripts/check-versions.mjs              # step + content, exits non-zero on failure
+node scripts/check-versions.mjs --audit      # also replay published history
+node scripts/check-versions.mjs --no-content # skip the network-heavy check
+```
+
+It checks three things, and they fail independently:
+
+- **step** — the local version has not gone backwards and has advanced by at
+  most one component. Satisfied by never bumping, so it is a sanity net only.
+- **content** — what `pack` produces for a version matches what npm published at
+  that version. **This is the load-bearing one.**
+- **audit** — replays the published history against the `step` rule, so the rule
+  is validated against releases that already happened rather than asserted.
+
+The failure worth understanding is not a missing dependency but a package whose
+**content changed while its version did not**. Nothing then resolves to the new
+code — `^0.1.0` keeps matching the already-published `0.1.0`, because
+`pnpm publish` skips versions already in the registry — so the dependant ships
+against stale behaviour with no install error at all. That is what broke the
+`0.4.2` release: the phase/trajectory split never reached npm, so the coaching
+hint silently stopped rendering.
+
+So: **if a package's packed content changes, its version must change.** The
+range in the dependant follows automatically from `workspace:^` at pack time, so
+bump the core and the extension together.
+
+Expects a clean `dist`; a fresh CI checkout is clean by construction, and on a
+long-lived local tree run `pnpm -r clean && pnpm -r build` first, or stale
+compiled output from a moved file reads as a content difference.
+
 ## Future Langfuse loop
 
 The classifier prompts are isolated in `src/prompt.ts`. That is the intended

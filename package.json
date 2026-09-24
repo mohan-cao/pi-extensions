@@ -15,6 +15,7 @@
     "build": "pnpm -r build",
     "build:unchecked": "pnpm -r build:unchecked",
     "test": "pnpm -r test",
+    "check-versions": "node ./scripts/check-versions.mjs",
     "pack:router": "node ./scripts/pack-router.mjs",
     "publish:router": "pnpm --filter @mohan-cao/pi-jev-response-router publish --access public"
   },
