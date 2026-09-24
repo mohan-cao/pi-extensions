@@ -3,24 +3,23 @@ import test from "node:test";
 
 import {
   FOOTER_MODES,
-  PHASES,
   TtlCache,
   buildState,
   classifyWithJev,
   composeMode,
   formatCoaching,
-  formatPhaseNudge,
   formatVerifyStatus,
-  judgePhase,
   judgeTrajectory,
   parseChoiceAnswer,
   parseClassificationResponse,
   parseNoulAnswer,
   parseScoreAnswer,
-  phaseRecommendation,
   policyFor,
   premisePolicyFor,
 } from "../dist/index.js";
+
+/** A stand-in for the phase vocabulary, which @mohan-cao/jev-phase owns. */
+const CHOICES = ["build", "design", "general"];
 
 const thresholds = {
   decompositionThreshold: 0.6,
@@ -242,7 +241,7 @@ test("footer modes are the documented set", () => {
   assert.deepEqual([...FOOTER_MODES], ["compact", "icons", "off"]);
 });
 
-test("judgePhase and judgeTrajectory each send only their own question", async () => {
+test("judgeTrajectory sends only the trajectory question", async () => {
   const originalFetch = globalThis.fetch;
   const questionsSeen = [];
 
@@ -252,12 +251,6 @@ test("judgePhase and judgeTrajectory each send only their own question", async (
       JSON.stringify({
         model: "jev-1.13.0",
         answers: {
-          next_phase: {
-            type: "choice",
-            choice: "build",
-            confidence: 0.9,
-            probabilities: { build: 0.9 },
-          },
           trajectory: {
             type: "choice",
             choice: "converging",
@@ -271,82 +264,37 @@ test("judgePhase and judgeTrajectory each send only their own question", async (
   };
 
   try {
-    const phase = await judgePhase([{ role: "user", text: "hi" }], "k", routerConfig);
     const trajectory = await judgeTrajectory([{ role: "user", text: "hi" }], "k", routerConfig);
 
-    assert.equal(phase.phase, "build");
-    assert.equal(phase.trajectory, undefined);
     assert.equal(trajectory.trajectory, "converging");
-    assert.equal(trajectory.phase, undefined);
-
-    // The whole point of the split: neither call asks the other's question.
-    assert.deepEqual(questionsSeen[0], ["next_phase"]);
-    assert.deepEqual(questionsSeen[1], ["trajectory"]);
+    // The phase question belongs to @mohan-cao/jev-phase; it must not be asked
+    // here. The matching assertion for that side lives in that package's tests.
+    assert.deepEqual(questionsSeen, [["trajectory"]]);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-const phaseConfig = {
-  routes: {
-    build: { model: "build-model" },
-    design: { model: "design-model" },
-    general: { model: "general-model" },
-  },
-  phaseConfidenceThreshold: 0.7,
-  trajectoryConfidenceThreshold: 0.7,
-  historyTurns: 8,
-};
-
-function judgment(overrides = {}) {
-  return {
-    phase: "build",
-    phaseConfidence: 0.9,
-    trajectory: "converging",
-    trajectoryConfidence: 0.9,
-    ...overrides,
-  };
+function trajectoryJudgment(overrides = {}) {
+  return { trajectory: "converging", trajectoryConfidence: 0.9, ...overrides };
 }
 
-test("phaseRecommendation fires only on a known mismatch", () => {
-  // On the design model, work moving to build, corroborated.
-  assert.deepEqual(phaseRecommendation(judgment(), "design-model", phaseConfig), {
-    phase: "build",
-    model: "build-model",
-    currentPhase: "design",
-  });
-  // Already on the right model.
-  assert.equal(phaseRecommendation(judgment(), "build-model", phaseConfig), undefined);
-  // Unmapped model — we cannot say it is wrong, so stay quiet.
-  assert.equal(phaseRecommendation(judgment(), "something-else", phaseConfig), undefined);
-  // Low phase confidence.
-  assert.equal(
-    phaseRecommendation(judgment({ phaseConfidence: 0.4 }), "design-model", phaseConfig),
-    undefined,
-  );
-});
-
-test("formatPhaseNudge renders by footer mode", () => {
-  const recommendation = phaseRecommendation(judgment(), "design-model", phaseConfig);
-  assert.equal(formatPhaseNudge(recommendation), "↪ build · build-model");
-  assert.equal(formatPhaseNudge(recommendation, "icons"), "↪🔨");
-  assert.equal(formatPhaseNudge(recommendation, "off"), undefined);
-  assert.equal(formatPhaseNudge(undefined), undefined);
-});
-
 test("formatCoaching gates on trajectory confidence", () => {
-  assert.equal(formatCoaching(judgment()), undefined);
+  assert.equal(formatCoaching(trajectoryJudgment()), undefined);
   assert.equal(
-    formatCoaching(judgment({ trajectory: "stuck_detail", trajectoryConfidence: 0.98 })),
+    formatCoaching(trajectoryJudgment({ trajectory: "stuck_detail", trajectoryConfidence: 0.98 })),
     "♾️ paralysis",
   );
   assert.equal(
-    formatCoaching(judgment({ trajectory: "stuck_framing", trajectoryConfidence: 1 }), "icons"),
+    formatCoaching(
+      trajectoryJudgment({ trajectory: "stuck_framing", trajectoryConfidence: 1 }),
+      "icons",
+    ),
     "🖼️",
   );
   // Below threshold — the false positive the eval measured at 0.45.
   assert.equal(
-    formatCoaching(judgment({ trajectory: "stuck_detail", trajectoryConfidence: 0.45 })),
+    formatCoaching(trajectoryJudgment({ trajectory: "stuck_detail", trajectoryConfidence: 0.45 })),
     undefined,
   );
 });
@@ -359,7 +307,7 @@ test("parseChoiceAnswer validates the choice against the allowed set", () => {
       },
     },
     "next_phase",
-    PHASES,
+    CHOICES,
   );
   assert.equal(parsed.choice, "build");
   assert.equal(parsed.confidence, 0.9);
@@ -373,7 +321,7 @@ test("parseChoiceAnswer validates the choice against the allowed set", () => {
           },
         },
         "next_phase",
-        PHASES,
+        CHOICES,
       ),
     /Unexpected next_phase choice/,
   );

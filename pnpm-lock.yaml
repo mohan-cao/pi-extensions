@@ -29,6 +29,12 @@ importers:
 
   packages/jev-classifier: {}
 
+  packages/jev-phase:
+    dependencies:
+      '@mohan-cao/jev-classifier':
+        specifier: workspace:^
+        version: link:../jev-classifier
+
   packages/pi-jev-response-router:
     dependencies:
       '@earendil-works/pi-ai':
@@ -40,6 +46,9 @@ importers:
       '@mohan-cao/jev-classifier':
         specifier: workspace:^
         version: link:../jev-classifier
+      '@mohan-cao/jev-phase':
+        specifier: workspace:^
+        version: link:../jev-phase
 
 packages:
 

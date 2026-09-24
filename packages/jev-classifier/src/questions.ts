@@ -98,20 +98,6 @@ export const VERIFY_OBLIGATION_QUESTION: ScoreQuestionSpec = {
   ],
 };
 
-export const NEXT_PHASE_QUESTION: ChoiceQuestionSpec = {
-  type: "choice",
-  instructions:
-    "What kind of work does this conversation need next? Judge the subject matter — what has been settled and what is still open — not how smoothly the conversation has been going.",
-  criteria: {
-    build:
-      "Implementation, tests, mechanical debugging, or straightforward code changes. The decisions needed to act are already settled.",
-    design:
-      "Architecture, ambiguous requirements, nuanced tradeoffs, adversarial review, or difficult debugging. Something material is still unresolved.",
-    general:
-      "General conversation, investigation, or mixed work that neither implementation nor design specifically describes.",
-  },
-};
-
 export const TRAJECTORY_QUESTION: ChoiceQuestionSpec = {
   type: "choice",
   instructions:

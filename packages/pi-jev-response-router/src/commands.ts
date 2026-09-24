@@ -1,6 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import { FOOTER_MODES, PHASES, type FooterMode, type Phase } from "@mohan-cao/jev-classifier";
+import { FOOTER_MODES, type FooterMode } from "@mohan-cao/jev-classifier";
+import { PHASES, type Phase } from "@mohan-cao/jev-phase";
 
 /** Mutable router state, shared with the hooks. */
 export interface RouterState {
