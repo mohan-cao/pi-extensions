@@ -19,10 +19,11 @@
     "publish:router": "pnpm --filter @mohan-cao/pi-jev-response-router publish --access public"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.3",
     "@earendil-works/pi-ai": "0.86.0",
     "@earendil-works/pi-coding-agent": "0.86.0",
     "@mohan-cao/jev-classifier": "workspace:^",
-    "typescript": "5.8.3",
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "typescript": "5.8.3"
   }
 }
