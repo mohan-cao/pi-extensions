@@ -43,6 +43,22 @@ the opposite way from the trajectory hint: verify needs to be **less** permissiv
 The gate is an expected score of 1.5 on a 0–3 scale, and the failure mode is that
 confident, well-formed prose clears it whether or not the claims were checked.
 
+**But the threshold is probably not the fix.** Reading the questions, the
+obligation check asks about *the request's* premise — "if the request rested on a
+false or oversimplified premise, did the response correct it" — and about inputs
+the request omitted. The failure above is a third thing: **the response asserted
+what it had not established.** That is not evasion (the response committed hard),
+not off-topic (it answered), and not an uncorrected user premise (the premise was
+fine). Criterion 4 gestures at "the information the answer actually depends on",
+which is adjacent, but nothing asks the direct question: *does this response
+assert things it did not check?*
+
+So the likely fix is a **new question**, or a fourth signal, rather than a lower
+gate. A score of 0.94 reflects a model genuinely reading the response as "fully
+met", so lowering the threshold would trade false positives for this case
+instead of detecting it. Settle this before the tuning pass, since it changes
+what gets tuned.
+
 ### Keep — phase, as an indicator
 
 Observes where the work currently sits (`build` / `design` / `general`).
