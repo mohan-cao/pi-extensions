@@ -127,9 +127,15 @@ One signed judgment per turn, from a single Choice question:
 
 | judgment | means |
 | --- | --- |
-| `advanced` | the turn settled something, or moved the work forward |
+| `advanced` | the turn settled something, moved the work forward, or converged on agreement |
 | `held` | neither advanced nor revisited — a clarifying question, an agreed scope, waiting |
 | `regressed` | the turn reopened or undid something |
+
+**Phase-agnostic on purpose.** The same judgment reads correctly in build as in
+design: "X versus Y, and we agreed on Y" is `advanced` just as much as a newly
+settled detail is. Naming a phase inside the question would make it answer
+differently per phase for no gain, and the phase indicator supplies that framing
+when it is shown alongside.
 
 The series is then aggregated by the host, as arithmetic:
 
@@ -143,6 +149,18 @@ The series is then aggregated by the host, as arithmetic:
 Percentiles and variance are deliberately absent: over a window this short they
 are noise, and over a signed series spread is nearly redundant with the
 proportions.
+
+#### The window is a tally, not a window
+
+Both numbers accumulate from the last **state transition** and reset to `0/0`
+there — a phase change starts a new trajectory, because the thing being measured
+is how *this stretch* of work is going, not the session as a whole. The
+denominator grows every turn; the numerator grows on `advanced`.
+
+The consequence worth knowing: **sensitivity falls as the stretch lengthens.** A
+three-turn spiral inside a forty-turn segment barely moves the ratio. If that
+becomes a problem, the fix is a second, shorter measure alongside this one — not
+a change to this one.
 
 #### Divergence is legitimate
 
@@ -173,9 +191,13 @@ a session converges — that is the property the reader watches it for.
 
 | mode | renders |
 | --- | --- |
-| `compact` | `3/8` — turns that advanced, out of the window |
-| `icons` | `↻` |
+| `compact` | `3/8` |
+| `icons` | `3/8` |
 | `off` | nothing |
+
+Numbers only, no glyph. The ratio is already the compact form, so there is nothing
+for `icons` mode to strip — it renders identically to `compact` by design rather
+than by oversight.
 
 `3/8` rather than `3/8 design turns aligned on decisions`: the footer is a
 glance, and the elaboration belongs wherever the full report is.
@@ -322,11 +344,10 @@ deleting it:
    spend is not a niche concern — only the very well funded are indifferent to
    it, and software is a cost centre nearly everywhere. A signal that has to be
    discovered and enabled is a signal nobody uses.
-4. **The trajectory window.** `3/8` implies a fixed window. Settle what happens
-   before it fills, and whether the series continues across a phase change or
-   resets with it. Also: is `advanced` phase-agnostic ("moved the work forward")
-   or decision-specific ("settled something")? Generic is simpler and reads the
-   same in build and design.
+4. **The trajectory window — resolved.** Cumulative from the last state
+transition, resetting to `0/0`; `advanced` is phase-agnostic; the footer renders
+numbers only. Internal vocabulary is an implementation detail, since the TUI can
+render different strings over the same judgment.
 5. **The cost model's allowance surface.** Deferred, but the gate: subscriptions
    are not in Pi's registry, so the allowance must be user-declared.
 
