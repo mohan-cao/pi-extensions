@@ -1,5 +1,10 @@
 # Shadow phase recommendation
 
+> **Partly superseded.** See [`classifier-scope.md`](./classifier-scope.md). The phase signal
+> now lives in `@mohan-cao/jev-phase`, and the coaching hint described below as `stuck_detail`
+> / `stuck_framing` has been replaced by a two-question progress ratio with no `stuck`
+> verdicts at all. The phase reasoning still stands; the trajectory material does not.
+
 **Status:** implemented on `feat/footer-signals` — questions, judgment, deterministic
 comparison, and Pi footer wiring. Thresholds are calibrated against the transition eval set in
 `scripts/jev-eval.mjs` (`--phase-only`).
