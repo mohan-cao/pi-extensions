@@ -4,8 +4,6 @@ import test from "node:test";
 import {
   FOOTER_MODES,
   TtlCache,
-  formatCoaching,
-  judgeTrajectory,
   parseChoiceAnswer,
   parseNoulAnswer,
   parseScoreAnswer,
@@ -13,14 +11,6 @@ import {
 
 /** A stand-in for the phase vocabulary, which @mohan-cao/jev-phase owns. */
 const CHOICES = ["build", "design", "general"];
-
-/** Transport settings for a Jev call. The endpoint is stubbed in these tests. */
-const routerConfig = {
-  endpoint: "https://api.typesafe.ai/v1/systemone",
-  model: "jev-latest",
-  timeoutMs: 1000,
-  retries: 0,
-};
 
 test("parseNoulAnswer clamps and validates the probability", () => {
   assert.equal(parseNoulAnswer({ answers: { x: { type: "noul", noul: 1.7 } } }, "x"), 1);
@@ -68,64 +58,6 @@ test("TtlCache expires, evicts, and can be disabled", () => {
 
 test("footer modes are the documented set", () => {
   assert.deepEqual([...FOOTER_MODES], ["compact", "icons", "off"]);
-});
-
-test("judgeTrajectory sends only the trajectory question", async () => {
-  const originalFetch = globalThis.fetch;
-  const questionsSeen = [];
-
-  globalThis.fetch = async (_url, init) => {
-    questionsSeen.push(Object.keys(JSON.parse(init.body).questions));
-    return new Response(
-      JSON.stringify({
-        model: "jev-1.13.0",
-        answers: {
-          trajectory: {
-            type: "choice",
-            choice: "converging",
-            confidence: 0.9,
-            probabilities: { converging: 0.9 },
-          },
-        },
-      }),
-      { status: 200, headers: { "content-type": "application/json" } },
-    );
-  };
-
-  try {
-    const trajectory = await judgeTrajectory([{ role: "user", text: "hi" }], "k", routerConfig);
-
-    assert.equal(trajectory.trajectory, "converging");
-    // The phase question belongs to @mohan-cao/jev-phase; it must not be asked
-    // here. The matching assertion for that side lives in that package's tests.
-    assert.deepEqual(questionsSeen, [["trajectory"]]);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-function trajectoryJudgment(overrides = {}) {
-  return { trajectory: "converging", trajectoryConfidence: 0.9, ...overrides };
-}
-
-test("formatCoaching gates on trajectory confidence", () => {
-  assert.equal(formatCoaching(trajectoryJudgment()), undefined);
-  assert.equal(
-    formatCoaching(trajectoryJudgment({ trajectory: "stuck_detail", trajectoryConfidence: 0.98 })),
-    "♾️ paralysis",
-  );
-  assert.equal(
-    formatCoaching(
-      trajectoryJudgment({ trajectory: "stuck_framing", trajectoryConfidence: 1 }),
-      "icons",
-    ),
-    "🖼️",
-  );
-  // Below threshold — the false positive the eval measured at 0.45.
-  assert.equal(
-    formatCoaching(trajectoryJudgment({ trajectory: "stuck_detail", trajectoryConfidence: 0.45 })),
-    undefined,
-  );
 });
 
 test("parseChoiceAnswer validates the choice against the allowed set", () => {

@@ -2,18 +2,19 @@
 
 ## Package layout
 
-Five packages: a harness-agnostic core, one package per judgment, and the
+Six packages: a harness-agnostic core, one package per judgment, and the
 extension that collects them.
 
 | package | contains |
 | --- | --- |
-| `packages/jev-classifier` | Jev transport, answer parsing, question-spec types, history state. No harness code, no dependencies, no preferences. |
+| `packages/jev-classifier` | Jev transport, answer parsing, the question-spec vocabulary. No harness code, no dependencies, no preferences. |
 | `packages/jev-classify` | The classification judgment: its three questions, `classifyWithJev`, and the response policies. |
 | `packages/jev-phase` | The phase judgment: its question, `judgePhase`, its formatter. |
 | `packages/jev-verify` | The verification judgment: its three questions, `verifyResponse`, its formatter. |
-| `packages/pi-jev-response-router` | Pi hooks, credential provider, session history, preferences, footer status, decision log. The collection. |
+| `packages/jev-trajectory` | The progress judgment: its question, `judgeTrajectory`, and pure aggregation over a series. |
+| `packages/pi-jev-response-router` | Pi hooks, credential provider, session history, preferences, footer status, progress tally, decision log. The collection. |
 
-`pi-jev-response-router` depends on all four. The core never sees a harness: it takes an API key,
+`pi-jev-response-router` depends on all five. The core never sees a harness: it takes an API key,
 a transport config, and question specs, and returns raw Jev answers. That is why the core has no
 dependencies and no thresholds — everything opinionated lives in a component or in the
 collection, and each component's config extends the core's transport-only `JevConfig`.

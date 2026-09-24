@@ -1,9 +1,6 @@
 export const FOOTER_MODES = ["compact", "icons", "off"] as const;
 export type FooterMode = (typeof FOOTER_MODES)[number];
 
-export const TRAJECTORIES = ["converging", "stuck_detail", "stuck_framing", "early"] as const;
-export type Trajectory = (typeof TRAJECTORIES)[number];
-
 /**
  * Transport settings for a Jev call.
  *
@@ -25,22 +22,30 @@ export interface HistoryTurn {
 }
 
 /**
- * What the post-generation trajectory judge observed. Orthogonal to phase: a
- * conversation can be stuck while implementing, or framing a problem badly
- * during general conversation.
+ * The question-spec vocabulary.
+ *
+ * Question specs live with the component that asks them, so the core keeps only
+ * the shapes every component shares. This is the intended seam for a future
+ * Langfuse `getPrompt()` loop.
  */
-export interface TrajectoryJudgment {
-  trajectory: Trajectory;
-  trajectoryConfidence: number;
-  model?: string;
+export interface NoulQuestionSpec {
+  type: "noul";
+  instructions: string;
+  criteria: { true: string; false: string };
 }
 
-/** Display policy for the coaching hint. */
-export interface TrajectoryConfig {
-  /** Minimum Choice confidence before a stuck-pattern hint is shown. */
-  trajectoryConfidenceThreshold: number;
-  /** Conversation turns supplied to the trajectory judge. */
-  historyTurns: number;
+export interface ScoreQuestionSpec {
+  type: "score";
+  instructions: string;
+  /** Ordered rubric; a description's position is its score, starting at 0. */
+  criteria: string[];
+}
+
+export interface ChoiceQuestionSpec {
+  type: "choice";
+  instructions: string;
+  /** Choice name → when it applies. */
+  criteria: Record<string, string>;
 }
 
 export interface JevNoulAnswer {

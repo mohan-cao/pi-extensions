@@ -8,6 +8,7 @@ import { loadPhaseConfig } from "../dist/config.js";
 import { appendDecision, decisionLogPath } from "../dist/decision-log.js";
 import piJevResponseRouter from "../dist/index.js";
 import { loadPreferences, preferencesPath, savePreferences } from "../dist/preferences.js";
+import { ProgressTally } from "../dist/progress.js";
 
 function withAgentDir(run) {
   const dir = mkdtempSync(join(tmpdir(), "jev-prefs-"));
@@ -307,4 +308,79 @@ test("jev-router dispatches commands by verb", async () => {
     else process.env.PI_CODING_AGENT_DIR = previous;
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// --- ProgressTally: the host side of the progress signal -------------------
+//
+// The aggregation itself is tested in @mohan-cao/jev-trajectory. What is tested
+// here is the window: when the series resets, and how the ratio renders.
+
+const ADVANCED = { advanceConfidence: 0.9, regressConfidence: 0.1 };
+const HELD = { advanceConfidence: 0.1, regressConfidence: 0.1 };
+const MIXED = { advanceConfidence: 0.9, regressConfidence: 0.9 };
+
+test("ProgressTally starts at 0/0 and counts what advances", () => {
+  const tally = new ProgressTally();
+  assert.equal(tally.format("compact", 0.7), "0/0");
+
+  tally.record(ADVANCED, "design");
+  tally.record(HELD, "design");
+  // A mixed turn had something advance, so it counts toward the numerator.
+  tally.record(MIXED, "design");
+
+  assert.equal(tally.format("compact", 0.7), "2/3");
+});
+
+test("ProgressTally resets when the phase changes", () => {
+  const tally = new ProgressTally();
+  tally.record(ADVANCED, "design");
+  tally.record(ADVANCED, "design");
+  assert.equal(tally.format("compact", 0.7), "2/2");
+
+  // A phase change starts a new trajectory, so only the new phase's turn counts.
+  tally.record(HELD, "build");
+  assert.equal(tally.format("compact", 0.7), "0/1");
+});
+
+test("ProgressTally does not reset while the phase holds", () => {
+  const tally = new ProgressTally();
+  tally.record(ADVANCED, "design");
+  tally.record(ADVANCED, "design");
+  tally.record(ADVANCED, "design");
+  assert.equal(tally.format("compact", 0.7), "3/3");
+});
+
+test("ProgressTally does not reset on its first turn", () => {
+  const tally = new ProgressTally();
+  tally.record(ADVANCED, "build");
+  assert.equal(tally.format("compact", 0.7), "1/1");
+});
+
+test("ProgressTally tolerates an unknown phase without resetting", () => {
+  const tally = new ProgressTally();
+  tally.record(ADVANCED, "design");
+  // The phase judgment may be disabled or have failed open. That is not a
+  // transition, so the series carries on rather than silently restarting.
+  tally.record(ADVANCED, undefined);
+  tally.record(ADVANCED, "design");
+  assert.equal(tally.format("compact", 0.7), "3/3");
+});
+
+test("ProgressTally applies the confidence gate, and off renders nothing", () => {
+  const tally = new ProgressTally();
+  tally.record(ADVANCED, "build");
+  // One answer is unsure, so the turn does not count at all.
+  tally.record({ advanceConfidence: 0.95, regressConfidence: 0.4 }, "build");
+
+  assert.equal(tally.format("compact", 0.7), "1/1");
+  assert.equal(tally.format("off", 0.7), undefined);
+  // Numbers only: the ratio is already the compact form, so icons matches.
+  assert.equal(tally.format("icons", 0.7), "1/1");
+});
+
+test("ProgressTally.reset clears the series", () => {
+  const tally = new ProgressTally();
+  tally.record(ADVANCED, "build");
+  tally.reset();
+  assert.equal(tally.format("compact", 0.7), "0/0");
 });

@@ -1,11 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import {
-  TtlCache,
-  formatCoaching,
-  judgeTrajectory,
-  type TrajectoryJudgment,
-} from "@mohan-cao/jev-classifier";
+import { TtlCache } from "@mohan-cao/jev-classifier";
+import { judgeTrajectory, progressOf, type TrajectoryJudgment } from "@mohan-cao/jev-trajectory";
 import {
   classifyWithJev,
   policyFor,
@@ -36,6 +32,7 @@ import {
   loadTrajectoryConfig,
   loadVerifyConfig,
 } from "./config.js";
+import { ProgressTally } from "./progress.js";
 import { lastExchange, recentHistory } from "./context.js";
 import { appendDecision, decisionLogPath, type DecisionRecord } from "./decision-log.js";
 import {
@@ -63,7 +60,8 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
   registerJevAuthProvider(pi);
 
   const config = loadConfig();
-  const trajectoryConfig = loadTrajectoryConfig();
+  const trajectoryConfig = loadTrajectoryConfig(config);
+  const progress = new ProgressTally();
   const verifyConfig = loadVerifyConfig(config);
   const classifyConfig = loadClassifyConfig(config);
   const cache = new TtlCache<ClassificationResult>(config.cacheTtlMs, config.cacheMaxEntries);
@@ -154,7 +152,13 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
 
   function describeLastTrajectory(): string {
     if (!lastTrajectory) return "none yet";
-    return `${lastTrajectory.trajectory}@${lastTrajectory.trajectoryConfidence.toFixed(2)}`;
+    // The gate is on the weaker of the two answers, so that is the number that
+    // decides whether this turn counted at all.
+    const gate = Math.min(
+      lastTrajectory.advanceConfidence,
+      lastTrajectory.regressConfidence,
+    );
+    return `${progressOf(lastTrajectory)}@${gate.toFixed(2)}`;
   }
 
   async function reportStatus(ctx: ExtensionContext): Promise<void> {
@@ -288,7 +292,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
   async function runTrajectoryJudgment(
     apiKey: string,
     ctx: ExtensionContext,
-  ): Promise<{ judgment: TrajectoryJudgment; hint: boolean } | undefined> {
+  ): Promise<TrajectoryJudgment | undefined> {
     const turns = recentHistory(ctx, trajectoryConfig.historyTurns, "");
     if (turns.length === 0) return undefined;
 
@@ -296,25 +300,18 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       const judgment = await judgeTrajectory(turns, apiKey, config, ctx.signal);
       lastTrajectory = judgment;
 
-      const hint = formatCoaching(
-        judgment,
-        state.footer,
-        trajectoryConfig.trajectoryConfidenceThreshold,
-      );
-      ctx.ui.setStatus(COACHING_STATUS_KEY, hint);
-
       if (state.debug) {
         ctx.ui.notify(
-          `Jev trajectory: ${judgment.trajectory} (conf=${judgment.trajectoryConfidence.toFixed(2)})`,
+          `Jev progress: ${progressOf(judgment)} (advance=${judgment.advanceConfidence.toFixed(2)}, regress=${judgment.regressConfidence.toFixed(2)})`,
           "info",
         );
       }
-      return { judgment, hint: hint !== undefined };
+      return judgment;
     } catch (error) {
-      // Coaching is advisory; never let it affect the run.
+      // Progress is advisory; never let it affect the run.
       if (state.debug) {
         ctx.ui.notify(
-          `Jev trajectory failed open: ${error instanceof Error ? error.message : String(error)}`,
+          `Jev progress failed open: ${error instanceof Error ? error.message : String(error)}`,
           "warning",
         );
       }
@@ -445,6 +442,19 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       }
     }
 
+    // The tally is recorded here rather than inside the progress runner: the two
+    // judgments run concurrently, and the phase is what decides whether the
+    // series resets, so it is only known once both have settled.
+    if (trajectory.status === "fulfilled" && trajectory.value) {
+      const phaseNow =
+        phase.status === "fulfilled" && phase.value ? phase.value.judgment.phase : lastPhase?.phase;
+      progress.record(trajectory.value, phaseNow);
+      ctx.ui.setStatus(
+        COACHING_STATUS_KEY,
+        progress.format(state.footer, trajectoryConfig.progressConfidenceThreshold),
+      );
+    }
+
     if (state.log) {
       const record: DecisionRecord = pending ?? { at: new Date().toISOString() };
       if (ctx.model?.id) record.modelRunning = ctx.model.id;
@@ -456,8 +466,9 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         if (phase.value.recommendedModel) record.recommendedModel = phase.value.recommendedModel;
       }
       if (trajectory.status === "fulfilled" && trajectory.value) {
-        record.trajectory = trajectory.value.judgment;
-        record.coachingHint = trajectory.value.hint;
+        record.trajectory = trajectory.value;
+        const tally = progress.summary(trajectoryConfig.progressConfidenceThreshold);
+        record.progress = { advanced: tally.advanced, total: tally.counted };
       }
       appendDecision(record);
     }
@@ -470,21 +481,24 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
 // `RouterConfig` is this extension's own type rather than the core's.
 export {
   FOOTER_MODES,
-  TRAJECTORIES,
   TtlCache,
-  formatCoaching,
   parseChoiceAnswer,
   parseNoulAnswer,
   parseScoreAnswer,
 } from "@mohan-cao/jev-classifier";
+export type { FooterMode, HistoryTurn, JevConfig } from "@mohan-cao/jev-classifier";
+export {
+  PROGRESS,
+  PROGRESS_VALUE,
+  judgeTrajectory,
+  summarizeProgress,
+} from "@mohan-cao/jev-trajectory";
 export type {
-  FooterMode,
-  HistoryTurn,
-  JevConfig,
-  Trajectory,
+  Progress,
+  ProgressSummary,
   TrajectoryConfig,
   TrajectoryJudgment,
-} from "@mohan-cao/jev-classifier";
+} from "@mohan-cao/jev-trajectory";
 export {
   RESPONSE_MODES,
   buildState,

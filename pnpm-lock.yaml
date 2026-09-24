@@ -41,6 +41,12 @@ importers:
         specifier: workspace:^
         version: link:../jev-classifier
 
+  packages/jev-trajectory:
+    dependencies:
+      '@mohan-cao/jev-classifier':
+        specifier: workspace:^
+        version: link:../jev-classifier
+
   packages/jev-verify:
     dependencies:
       '@mohan-cao/jev-classifier':
@@ -64,6 +70,9 @@ importers:
       '@mohan-cao/jev-phase':
         specifier: workspace:^
         version: link:../jev-phase
+      '@mohan-cao/jev-trajectory':
+        specifier: workspace:^
+        version: link:../jev-trajectory
       '@mohan-cao/jev-verify':
         specifier: workspace:^
         version: link:../jev-verify
