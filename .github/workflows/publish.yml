@@ -1,36 +1,51 @@
-name: Publish to npm
+name: Release
 
-# Publishes a single workspace package when a `<package-name>@<version>` tag is
-# pushed, e.g. @mohan-cao/pi-jev-response-router@0.2.0
+# Changesets release flow. A push to main either opens or updates a "Version
+# Packages" pull request (when there are unconsumed changesets), or publishes
+# (when that pull request is merged). This replaces the previous per-package tag
+# trigger, which required one commit per package because a single commit can
+# only carry one tag.
 #
-# Per-package tags mean releasing one package never requires bumping or tagging
-# the others, and adding a new package needs no change to this workflow.
+# The filename is deliberate: npm's trusted-publisher entries for BOTH packages
+# name `publish.yml`, and npm matches on the workflow filename. Renaming this
+# file means updating the entry on npmjs.com for every package.
 #
-# Auth: npm trusted publishing (OIDC). No NPM_TOKEN secret is required.
-# One-time npm setup, per package (the package must exist on npm first):
+# Auth: npm trusted publishing (OIDC). No NPM_TOKEN secret is required, and one
+# must not be set — a static `_authToken` in .npmrc makes npm skip its OIDC
+# exchange, which is the cause of every "misleading 404" report in this area.
 #   npmjs.com -> package -> Settings -> Trusted publishing -> GitHub Actions
 #     Organization/user: mohan-cao
 #     Repository:        pi-extensions
 #     Workflow filename: publish.yml
-#     Allowed actions:   npm publish
+#     Allowed actions:   npm publish, npm stage publish
 
 on:
   push:
-    tags:
-      # `*` does not match `/`, so `**` is required to span the scope slash.
-      - "**@*"
+    branches:
+      - main
 
-permissions:
-  contents: read
-  # Required for npm trusted publishing: lets GitHub mint the OIDC token that
-  # npm exchanges for a short-lived, workflow-scoped publish credential.
-  id-token: write
+# Each job declares its own permissions; the select-mode and version jobs must
+# not be able to reach the registry.
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  publish:
+  select-mode:
+    name: Select mode
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.select-mode.outputs.mode }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Changesets needs history to work out what is already released.
+          fetch-depth: 0
 
       # pnpm/action-setup is the correct action for pnpm v10 and older
       # (pnpm/setup is only for v11+). Version matches packageManager.
@@ -41,37 +56,85 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
-          registry-url: "https://registry.npmjs.org"
 
       # The tracked pnpm-lock.yaml is the only lockfile in the repo.
       - run: pnpm install --frozen-lockfile
 
-      # Fails if the tag is not <name>@<version>, names an unknown package, or
-      # disagrees with the manifest version.
-      - name: Resolve package from tag
-        id: pkg
-        run: node scripts/resolve-package.mjs "$GITHUB_REF_NAME"
+      - name: Select mode
+        id: select-mode
+        uses: changesets/action/select-mode@v2
 
-      # `pkg...` includes workspace dependencies, so this stays correct if a
-      # package ever depends on another package in this repo.
-      - run: pnpm --filter "${{ steps.pkg.outputs.name }}..." build
-      - run: pnpm --filter "${{ steps.pkg.outputs.name }}..." --if-present test
+  version:
+    name: Version
+    if: needs.select-mode.outputs.mode == 'version'
+    needs: select-mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Commit the version bumps and push the release branch.
+      contents: write
+      # Open or update the Version Packages pull request.
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-      # `npm publish` ships the `workspace:` protocol verbatim, and no npm
-      # consumer can resolve it (EUNSUPPORTEDPROTOCOL). `pnpm pack` rewrites it to
-      # a concrete range, so pack with pnpm and publish the tarball with npm —
-      # keeping the trusted-publishing OIDC flow, which npm's publish provides.
-      - name: Pack
-        run: pnpm --filter "${{ steps.pkg.outputs.name }}" pack --pack-destination "$RUNNER_TEMP"
+      - uses: pnpm/action-setup@v6
+        with:
+          version: "10.18.0"
 
-      # Fail closed: shipping an unresolvable range is worse than not shipping.
-      - name: Verify the workspace protocol was rewritten
-        run: |
-          tarball="$(ls "$RUNNER_TEMP"/*.tgz | head -1)"
-          if tar -xzOf "$tarball" package/package.json | grep -q '"workspace:'; then
-            echo "::error::packed manifest still contains a workspace: range"
-            exit 1
-          fi
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
 
-      - name: Publish
-        run: npm publish "$RUNNER_TEMP"/*.tgz --access public
+      - run: pnpm install --frozen-lockfile
+
+      # Applies the pending changesets: bumps the declared packages, and bumps
+      # their dependants by `updateInternalDependencies` so the range follows.
+      - uses: changesets/action/version@v2
+        with:
+          script: pnpm changeset version
+          commit-message: "chore: version packages"
+          pr-title: "chore: version packages"
+
+  publish:
+    name: Publish
+    if: needs.select-mode.outputs.mode == 'publish'
+    needs: select-mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # Create the release tags and the GitHub releases.
+      contents: write
+      # npm trusted publishing: lets GitHub mint the OIDC token that npm
+      # exchanges for a short-lived, workflow-scoped publish credential.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: "10.18.0"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - run: pnpm install --frozen-lockfile
+
+      # Fail closed: do not publish a package that does not build or test.
+      - run: pnpm -r build
+      - run: pnpm -r test
+
+      # Publishes every package changesets considers ready, in dependency
+      # order, and creates the matching tags. `prepack` builds, and the pnpm
+      # pack path rewrites `workspace:` ranges to concrete ones — `npm publish`
+      # would ship the protocol verbatim and no consumer could resolve it
+      # (EUNSUPPORTEDPROTOCOL).
+      - uses: changesets/action/publish@v2
+        with:
+          script: pnpm changeset publish

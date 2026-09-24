@@ -108,29 +108,42 @@ To publish the scoped package manually:
 
 > npm scoped package syntax is `@scope/package`, not `@scope:package`.
 
-### Releasing via GitHub Actions
+### Releasing
 
-Releases are per-package. Bump only the package you are releasing, then tag it
-with `<package-name>@<version>`:
+Releases are driven by [changesets](https://changesets.dev). A push to `main`
+either opens or updates a **Version Packages** pull request, or publishes — one
+flow, and no hand-written version bumps:
 
 ```bash
-git checkout main && git pull
-git tag "@mohan-cao/pi-jev-response-router@0.2.0"
-git push origin "@mohan-cao/pi-jev-response-router@0.2.0"
+pnpm changeset          # describe the change; commit the generated file with your PR
+pnpm changeset status   # show what the next release will contain
 ```
 
-`.github/workflows/publish.yml` resolves the package from the tag
-(`scripts/resolve-package.mjs`), asserts the tag version matches the manifest,
-builds and tests only that package, then publishes it with npm trusted
-publishing (OIDC, no token, provenance attached).
+Merging the Version Packages PR runs `.github/workflows/publish.yml`, which
+publishes every package changesets considers ready — **in dependency order** —
+and creates the tags and GitHub releases. Because the graph decides, the
+classifier-first ordering is not something anyone has to remember:
+`updateInternalDependencies: "patch"` bumps a dependant whenever its dependency
+is bumped, and the range itself follows `workspace:^` at pack time. A change to
+the classifier therefore releases the router too, without a second commit or a
+second tag.
 
-A repo-wide `v*` tag does **not** trigger a release, and releasing one package
-never requires bumping or tagging the others. Each package needs its own
-one-time trusted-publisher entry on npmjs.com pointing at `publish.yml`.
+That matters more than convenience. A package whose content changed while its
+version did not is **invisible**: `^0.1.0` keeps matching the already-published
+`0.1.0`, so the dependant ships against stale behaviour with no install error at
+all. That is what broke the `0.4.2` release — the phase/trajectory split never
+reached npm, and the coaching hint silently stopped rendering.
 
-Because `pi-jev-response-router` depends on `jev-classifier`, publish the core
-first — otherwise the extension installs against a version that is not on the
-registry yet.
+Auth is npm trusted publishing (OIDC); there is no `NPM_TOKEN`. Each package
+needs its own trusted-publisher entry on npmjs.com, and because npm matches on
+the **workflow filename**, renaming `publish.yml` means updating every entry. A
+package's *first* publish cannot use OIDC — npm requires the package to exist
+before a publisher can be configured for it — so bootstrap that one with a local
+`npm login && npm publish`.
+
+Do not set `NPM_TOKEN`, or any `_authToken` in `.npmrc`: a statically configured
+token makes npm skip its OIDC exchange, which surfaces as a misleading `404` on
+publish rather than an auth error.
 
 ## Future Langfuse loop
 
