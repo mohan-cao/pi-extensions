@@ -108,24 +108,88 @@ for the trajectory and cost signals.
 
 Default on. It is a single judgment call and a status string.
 
-### Keep — trajectory (the coaching hint)
+### Keep, redesigned — trajectory (the progress ratio)
 
-Observes whether the loop is converging, and names the shape when it is not
-(`♾️ paralysis`, `🖼️ framing`). This is the clearest case for the rule: the user
-is *inside* the loop and is the worst-placed observer of it.
+Observes whether the work is advancing. This is the clearest case for the rule:
+the user is *inside* the loop and is the worst-placed observer of it.
 
-Two honest caveats:
+**Redesigned after review. The categorical version was wrong**, and the objection
+that killed it is worth recording: *if something is in progress and not
+converging, is it stuck?* The old vocabulary answered yes by omission — it had
+`converging` and two flavours of `stuck`, so a turn that neither advanced nor
+revisited had nowhere to go. Worse, `stuck_detail` and `stuck_framing` were
+**verdicts rather than observations**, which is what the rule at the top of this
+document forbids.
 
-- **Precision matters, not recall.** A senior engineer may simply never produce
-  the stuck patterns the eval set synthesises — the hint being rare is not
-  evidence it is broken. The question is whether it is right when it fires.
-- **The false-positive rate is unmeasured.** The eval set's weak spot is real:
-  `design-open` flips between `stuck_detail` and `converging` (0.29–0.52),
-  because the taxonomy has no "legitimately still open" category. Early design
-  work is the most likely place for a wrong hint.
+#### What is measured instead
 
-Keep, but do not call it validated until it has fired in real use and been
-judged right.
+One signed judgment per turn, from a single Choice question:
+
+| judgment | means |
+| --- | --- |
+| `advanced` | the turn settled something, or moved the work forward |
+| `held` | neither advanced nor revisited — a clarifying question, an agreed scope, waiting |
+| `regressed` | the turn reopened or undid something |
+
+The series is then aggregated by the host, as arithmetic:
+
+| aggregate | reading |
+| --- | --- |
+| net direction | mean of the −1/0/+1 series. Positive means progressing, *even with much still open* |
+| oscillation | sign changes. A framing loop shows up here, not as a category |
+| longest non-advancing streak | the honest version of "stuck": no net progress for N turns, stated as a fact |
+| spread | proportion `regressed`. High `regressed` *with* high `advanced` is a healthy correction cycle; `regressed` with nothing advancing is a spiral |
+
+Percentiles and variance are deliberately absent: over a window this short they
+are noise, and over a signed series spread is nearly redundant with the
+proportions.
+
+#### Divergence is legitimate
+
+Two cases prompted this, and they behave differently:
+
+- **Reopening on new information** — a detail believed settled turns out to rest
+  on a false premise. Separable in principle, because it introduces a *reason*.
+- **Disagreement** between the user and the model. **Not** reliably separable
+  from a loop by text alone: both look like revisiting, and the difference is
+  whether positions are sharpened or restated.
+
+So neither is named. `regressed` records that it happened; the reader decides
+whether it was a correction or a spiral. Naming it would be the same overreach as
+recommending a model.
+
+#### Where the pieces live
+
+- **Jev** — the per-turn judgment. The only part that needs a model call.
+- **The package** — the question, the judge, and pure aggregation helpers over a
+  series. No I/O, no thresholds.
+- **The host** — the footer slot, the window, and the wording. The footer
+  component logic stays in the Pi extension.
+
+#### Footer wording
+
+A ratio, not a phrase. The number *is* the signal, and it should visibly rise as
+a session converges — that is the property the reader watches it for.
+
+| mode | renders |
+| --- | --- |
+| `compact` | `3/8` — turns that advanced, out of the window |
+| `icons` | `↻` |
+| `off` | nothing |
+
+`3/8` rather than `3/8 design turns aligned on decisions`: the footer is a
+glance, and the elaboration belongs wherever the full report is.
+
+#### Caveats
+
+- **Precision matters, not recall.** A senior engineer may rarely produce the
+  patterns the eval set synthesises. The hint being rare is not evidence it is
+  broken; the question is whether it is right when it fires.
+- **The eval baselines are invalidated.** `detail-spiral`, `framing-loop`, and
+  `design-open` were labelled against the old categories and need re-baselining
+  against the series. That is the point — `design-open`'s 0.29–0.52 flip becomes
+  a measurable oscillation rather than a coin flip — but it is work.
+- **Never validated in real use.** It has not fired for a real session yet.
 
 ### Reserved — loop cost
 
@@ -238,7 +302,7 @@ deleting it:
 | --- | --- |
 | verify | the flag agrees with a skim every time, so it never changes what you do |
 | phase | the label stops being read — an indicator nobody reads is decoration |
-| trajectory | when it fires, it is wrong more often than right |
+| trajectory | the ratio stops matching the reader's own sense of whether the work advanced |
 | cost | the arithmetic is never surprising enough to act on |
 
 ## Open decisions
@@ -258,9 +322,11 @@ deleting it:
    spend is not a niche concern — only the very well funded are indifferent to
    it, and software is a cost centre nearly everywhere. A signal that has to be
    discovered and enabled is a signal nobody uses.
-4. **The coaching hint's precision target.** Decide what "right when it fires"
-   means *before* measuring, or the measurement will be fitted to whatever the
-   first few firings look like.
+4. **The trajectory window.** `3/8` implies a fixed window. Settle what happens
+   before it fills, and whether the series continues across a phase change or
+   resets with it. Also: is `advanced` phase-agnostic ("moved the work forward")
+   or decision-specific ("settled something")? Generic is simpler and reads the
+   same in build and design.
 5. **The cost model's allowance surface.** Deferred, but the gate: subscriptions
    are not in Pi's registry, so the allowance must be user-declared.
 
