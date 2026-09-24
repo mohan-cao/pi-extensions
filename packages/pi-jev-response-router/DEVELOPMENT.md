@@ -147,23 +147,39 @@ before a publisher can be configured for it — so bootstrap that one with a loc
 **A new package must be bootstrapped before it can be released.** changesets
 publishes any workspace package whose version is not on the registry, so an
 unpublished new package makes the next publish run attempt a first publish it
-cannot authenticate — failing the whole release, not just that package.
+cannot authenticate — failing the whole release, not just that package. While
+that is true, the package and everything that depends on it belong in `ignore`;
+changesets enforces the transitive part itself.
 
-changesets enforces the consequence for you: skipping a package requires skipping
-everything that depends on it, or it reports an invalid tree. So while
-`@mohan-cao/jev-phase` is unpublished, it and `@mohan-cao/pi-jev-response-router`
-are both in `ignore`, which excludes them from versioning and publishing.
-**That means the router cannot be released until the bootstrap happens.**
+To bootstrap one, in order:
 
-To unblock, in order:
+1. Publish it **with pnpm**, from the repository root:
 
-1. `npm login && npm publish` from `packages/jev-phase` (the first publish of a
-   package cannot use OIDC, because npm requires the package to exist before a
-   trusted publisher can be configured for it).
+   ```bash
+   pnpm --dir packages/<name> pack --pack-destination "$PWD"
+   npm publish ./*.tgz --access public
+   ```
+
+   The first publish of a package cannot use OIDC, because npm requires the
+   package to exist before a trusted publisher can be configured for it, so this
+   one needs a local `npm login`.
+
 2. Add its trusted-publisher entry on npmjs.com — workflow filename `publish.yml`.
-3. Remove **both** entries from `ignore` in `.changeset/config.json`.
-4. Add a changeset, so the core, the new package, and the router are released in
-   dependency order in one go.
+3. Remove it and its dependants from `ignore` in `.changeset/config.json`.
+4. Add a changeset so it gets a normal release.
+
+**`npm publish` on its own is wrong here, and it fails silently.** It ships the
+`workspace:` protocol verbatim, so the package installs for nobody:
+
+```text
+npm error code EUNSUPPORTEDPROTOCOL
+npm error Unsupported URL Type "workspace:": workspace:^
+```
+
+`pnpm pack` rewrites `workspace:^` to a concrete range at pack time, which is why
+the release workflow packs with pnpm and publishes the tarball with npm. Same
+trap as `0.4.0` — it caught `jev-phase@0.1.0`, which is why the version in this
+repository still needs a bump before that package is usable.
 
 Do not set `NPM_TOKEN`, or any `_authToken` in `.npmrc`: a statically configured
 token makes npm skip its OIDC exchange, which surfaces as a misleading `404` on

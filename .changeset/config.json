@@ -5,10 +5,7 @@
   "format": "auto",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "ignore": [
-    "@mohan-cao/jev-phase",
-    "@mohan-cao/pi-jev-response-router"
-  ],
+  "ignore": [],
   "fixed": [],
   "linked": [],
   "updateInternalDependencies": "patch"
