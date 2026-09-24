@@ -3,11 +3,8 @@ import { dirname, join } from "node:path";
 
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
-import type {
-  ClassificationSignals,
-  ResponseMode,
-  TrajectoryJudgment,
-} from "@mohan-cao/jev-classifier";
+import type { ClassificationSignals, ResponseMode } from "@mohan-cao/jev-classify";
+import type { TrajectoryJudgment } from "@mohan-cao/jev-classifier";
 import type { PhaseJudgment } from "@mohan-cao/jev-phase";
 import type { VerifyResult } from "@mohan-cao/jev-verify";
 

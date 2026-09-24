@@ -2,7 +2,7 @@ import type { ResponseMode } from "./types.js";
 
 /**
  * Policy bodies are injected as a named system-prompt section (see
- * `POLICY_SECTION` in index.ts), so Pi wraps them in a
+ * `POLICY_SECTION` in the extension), so Pi wraps them in a
  * `<jev-response-policy>` tag. Do not re-add the wrapper here.
  */
 
@@ -34,15 +34,20 @@ Avoid vague "it depends" hedging: name the dependencies explicitly and explain
 how changing them changes the conclusion.
 `.trim();
 
+/**
+ * A `Record` rather than a `switch`, so a new `ResponseMode` becomes a compile
+ * error here instead of a silent `undefined` — which would mean no policy
+ * injected, with nothing to notice it. Same idiom as `PROGRESS_VALUE` and
+ * `PHASE_GLYPH`.
+ */
+const POLICY_BY_MODE = {
+  bounded_verification: BOUNDED_VERIFICATION_POLICY,
+  decomposition_required: DECOMPOSITION_POLICY,
+  normal: undefined,
+} satisfies Record<ResponseMode, string | undefined>;
+
 export function policyFor(mode: ResponseMode): string | undefined {
-  switch (mode) {
-    case "bounded_verification":
-      return BOUNDED_VERIFICATION_POLICY;
-    case "decomposition_required":
-      return DECOMPOSITION_POLICY;
-    case "normal":
-      return undefined;
-  }
+  return POLICY_BY_MODE[mode];
 }
 
 const PREMISE_POLICY = `

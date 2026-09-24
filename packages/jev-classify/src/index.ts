@@ -1,18 +1,45 @@
-import { callSystemOne, clamp01, parseNoulAnswer, parseScoreAnswer } from "./client.js";
+/**
+ * The classification signal.
+ *
+ * One Jev call answering what kind of response the current request needs, plus
+ * the response policy that follows from it. This is the component that decides
+ * whether a policy section is injected at all, so it is also the one whose
+ * thresholds matter most — and they are still tuned against a synthetic eval
+ * set rather than real usage. See the README.
+ */
+
+import {
+  callSystemOne,
+  clamp01,
+  parseNoulAnswer,
+  parseScoreAnswer,
+  type HistoryTurn,
+  type JevSystemOneResponse,
+  type NoulQuestionSpec,
+  type ScoreQuestionSpec,
+} from "@mohan-cao/jev-classifier";
+
 import {
   BOUNDED_VERIFICATION_QUESTION,
   DECOMPOSITION_QUESTION,
   PREMISE_DEFECT_QUESTION,
-  type NoulQuestionSpec,
-  type ScoreQuestionSpec,
 } from "./questions.js";
 import type {
   ClassificationResult,
   ClassificationState,
-  HistoryTurn,
-  JevSystemOneResponse,
+  ClassifyConfig,
   ResponseMode,
-  RouterConfig,
+} from "./types.js";
+
+export { BOUNDED_VERIFICATION_QUESTION, DECOMPOSITION_QUESTION, PREMISE_DEFECT_QUESTION };
+export { policyFor, premisePolicyFor } from "./policies.js";
+export { RESPONSE_MODES } from "./types.js";
+export type {
+  ClassificationResult,
+  ClassificationSignals,
+  ClassificationState,
+  ClassifyConfig,
+  ResponseMode,
 } from "./types.js";
 
 const DECOMPOSITION_ID = "requires_decomposition";
@@ -35,7 +62,7 @@ export function buildState(prompt: string, history: HistoryTurn[]): Classificati
 /** Decomposition takes precedence; `normal` is the residual, never a competitor. */
 export function composeMode(
   signals: ClassificationResult["signals"],
-  config: Pick<RouterConfig, "decompositionThreshold" | "boundedVerificationThreshold">,
+  config: Pick<ClassifyConfig, "decompositionThreshold" | "boundedVerificationThreshold">,
 ): ResponseMode {
   if (signals.decomposition >= config.decompositionThreshold) return "decomposition_required";
   if (signals.boundedVerification >= config.boundedVerificationThreshold) {
@@ -46,7 +73,7 @@ export function composeMode(
 
 export function parseClassificationResponse(
   payload: JevSystemOneResponse,
-  config: Pick<RouterConfig, "decompositionThreshold" | "boundedVerificationThreshold">,
+  config: Pick<ClassifyConfig, "decompositionThreshold" | "boundedVerificationThreshold">,
 ): ClassificationResult {
   const signals = {
     decomposition: parseNoulAnswer(payload, DECOMPOSITION_ID),
@@ -61,12 +88,9 @@ export function parseClassificationResponse(
     normal: clamp01(1 - Math.max(signals.decomposition, signals.boundedVerification)),
   };
 
-  const confidence =
-    mode === "decomposition_required"
-      ? signals.decomposition
-      : mode === "bounded_verification"
-        ? signals.boundedVerification
-        : probabilities.normal;
+  // The confidence of a decision is the probability of the mode it picked, which
+  // `probabilities` already holds — no need to re-derive it from the signals.
+  const confidence = probabilities[mode];
 
   return {
     mode,
@@ -80,7 +104,7 @@ export function parseClassificationResponse(
 export async function classifyWithJev(
   prompt: string,
   apiKey: string,
-  config: RouterConfig,
+  config: ClassifyConfig,
   parentSignal?: AbortSignal,
   history: HistoryTurn[] = [],
 ): Promise<ClassificationResult> {
