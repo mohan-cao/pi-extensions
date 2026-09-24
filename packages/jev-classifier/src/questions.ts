@@ -64,40 +64,6 @@ export const PREMISE_DEFECT_QUESTION: ScoreQuestionSpec = {
   ],
 };
 
-export const VERIFY_ANSWER_QUESTION: NoulQuestionSpec = {
-  type: "noul",
-  instructions:
-    "Does the response address the user's actual request? Addressing includes naming what the answer depends on, or asking for information it depends on; it does not require a single final verdict.",
-  criteria: {
-    true: "The response engages the actual question and gives the user something actionable or conclusive, including a clear statement of what the answer depends on.",
-    false:
-      "The response deflects, answers a different question, or leaves the user's request unaddressed.",
-  },
-};
-
-export const VERIFY_EVASIVE_QUESTION: NoulQuestionSpec = {
-  type: "noul",
-  instructions:
-    "Does the response avoid committing to a position that the request calls for? Distinguish genuine evasion from a conditional answer that names the determining factors and then commits within them.",
-  criteria: {
-    true: "The response declines to take any position, or offers only generic caveats and filler, even though the request called for a conclusion.",
-    false:
-      "The response commits to a position, or conditions its answer on explicitly named factors and commits within each. Conditional-but-committed is not evasion.",
-  },
-};
-
-export const VERIFY_OBLIGATION_QUESTION: ScoreQuestionSpec = {
-  type: "score",
-  instructions:
-    "Given what the request did and did not provide, did the response meet its obligation? If the request rested on a false or oversimplified premise, did the response correct it? If the request omitted information needed to answer well, did the response surface those inputs (by asking, or by branching on the determining conditions) rather than giving a generic answer that would be true regardless?",
-  criteria: [
-    "Fully met. Answered as posed and addressed any false premise or missing input.",
-    "Mostly met. Minor omissions that don't change whether the answer is useful.",
-    "Partially met. Answered the literal question but left a material premise or missing input unaddressed.",
-    "Not met. Technically true but misleading or unusable, because it ignored a false premise or the information the answer actually depends on.",
-  ],
-};
-
 export const TRAJECTORY_QUESTION: ChoiceQuestionSpec = {
   type: "choice",
   instructions:

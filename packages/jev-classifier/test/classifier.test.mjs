@@ -8,7 +8,6 @@ import {
   classifyWithJev,
   composeMode,
   formatCoaching,
-  formatVerifyStatus,
   judgeTrajectory,
   parseChoiceAnswer,
   parseClassificationResponse,
@@ -225,16 +224,6 @@ test("TtlCache expires, evicts, and can be disabled", () => {
   const disabled = new TtlCache(1000, 0);
   disabled.set("a", 1);
   assert.equal(disabled.get("a"), undefined);
-});
-
-test("formatVerifyStatus renders by footer mode and clears when ok", () => {
-  const base = { answersQuestion: 0.9, evasive: 0.1, obligationUnmet: 0.2 };
-  assert.equal(formatVerifyStatus({ ...base, flag: "ok" }), undefined);
-  assert.equal(formatVerifyStatus({ ...base, flag: "evasive" }), "🤷 evasive");
-  assert.equal(formatVerifyStatus({ ...base, flag: "unmet" }), "🚩 unmet");
-  assert.equal(formatVerifyStatus({ ...base, flag: "evasive" }, "icons"), "🤷");
-  assert.equal(formatVerifyStatus({ ...base, flag: "unmet" }, "icons"), "🚩");
-  assert.equal(formatVerifyStatus({ ...base, flag: "unmet" }, "off"), undefined);
 });
 
 test("footer modes are the documented set", () => {

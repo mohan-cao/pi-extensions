@@ -1,9 +1,9 @@
 import {
   type JevChoiceAnswer,
+  type JevConfig,
   type JevNoulAnswer,
   type JevScoreAnswer,
   type JevSystemOneResponse,
-  type RouterConfig,
 } from "./types.js";
 
 export class JevError extends Error {
@@ -68,7 +68,7 @@ export async function callSystemOne(
   state: unknown,
   questions: Record<string, unknown>,
   apiKey: string,
-  config: RouterConfig,
+  config: JevConfig,
   parentSignal?: AbortSignal,
 ): Promise<JevSystemOneResponse> {
   const requestBody = JSON.stringify({ model: config.model, state, questions });

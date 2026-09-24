@@ -7,9 +7,9 @@ import type {
   ClassificationSignals,
   ResponseMode,
   TrajectoryJudgment,
-  VerifyResult,
 } from "@mohan-cao/jev-classifier";
 import type { PhaseJudgment } from "@mohan-cao/jev-phase";
+import type { VerifyResult } from "@mohan-cao/jev-verify";
 
 const FILE_NAME = "jev-decisions.jsonl";
 

@@ -149,7 +149,9 @@ publishes any workspace package whose version is not on the registry, so an
 unpublished new package makes the next publish run attempt a first publish it
 cannot authenticate — failing the whole release, not just that package. While
 that is true, the package and everything that depends on it belong in `ignore`;
-changesets enforces the transitive part itself.
+changesets enforces the transitive part itself. **That list is the ledger of
+packages that exist but are not yet releasable**, and it should shrink to empty
+as each one is bootstrapped.
 
 To bootstrap one, in order:
 

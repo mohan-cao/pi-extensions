@@ -17,7 +17,7 @@ import {
   type ChoiceQuestionSpec,
   type FooterMode,
   type HistoryTurn,
-  type RouterConfig,
+  type JevConfig,
 } from "@mohan-cao/jev-classifier";
 
 export const PHASES = ["build", "design", "general"] as const;
@@ -92,7 +92,7 @@ const PHASE_ID = "next_phase";
 export async function judgePhase(
   turns: HistoryTurn[],
   apiKey: string,
-  config: RouterConfig,
+  config: JevConfig,
   parentSignal?: AbortSignal,
 ): Promise<PhaseJudgment> {
   const payload = await callSystemOne(
