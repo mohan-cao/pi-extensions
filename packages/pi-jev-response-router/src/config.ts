@@ -1,4 +1,5 @@
-import { type JevConfig, type RouterConfig, type TrajectoryConfig } from "@mohan-cao/jev-classifier";
+import { type JevConfig, type TrajectoryConfig } from "@mohan-cao/jev-classifier";
+import type { ClassifyConfig } from "@mohan-cao/jev-classify";
 import type { VerifyConfig } from "@mohan-cao/jev-verify";
 import { PHASES, type Phase, type PhaseConfig } from "@mohan-cao/jev-phase";
 
@@ -23,12 +24,8 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-export function loadConfig(): RouterConfig {
-  // PI_JEV_ROUTER_MIN_CONFIDENCE was the pre-0.2 knob. It was effectively a
-  // no-op (confidence is in [0, 1] and the default was 0), so it now serves as
-  // a shared fallback default for the two real thresholds.
-  const legacyMinConfidence = numberFromEnv("PI_JEV_ROUTER_MIN_CONFIDENCE", 0);
-
+/** Transport settings shared by every component. */
+export function loadJevConfig(): JevConfig {
   return {
     endpoint: process.env.PI_JEV_ENDPOINT ?? "https://api.typesafe.ai/v1/systemone",
     model: process.env.PI_JEV_MODEL ?? "jev-latest",
@@ -36,6 +33,39 @@ export function loadConfig(): RouterConfig {
     // default is deliberately short; fail-open covers the rest.
     timeoutMs: Math.max(1, numberFromEnv("PI_JEV_ROUTER_TIMEOUT_MS", 5_000)),
     retries: Math.max(0, Math.floor(numberFromEnv("PI_JEV_ROUTER_RETRIES", 2))),
+  };
+}
+
+/**
+ * The extension's own settings.
+ *
+ * The classification cache lives here rather than in the classifier because
+ * caching is a host concern: the component makes a call when asked and holds no
+ * state.
+ */
+export interface RouterConfig extends JevConfig {
+  /** Classification cache TTL in ms. 0 disables caching. */
+  cacheTtlMs: number;
+  cacheMaxEntries: number;
+}
+
+export function loadConfig(): RouterConfig {
+  return {
+    ...loadJevConfig(),
+    cacheTtlMs: Math.max(0, numberFromEnv("PI_JEV_ROUTER_CACHE_TTL_MS", 300_000)),
+    cacheMaxEntries: Math.max(0, Math.floor(numberFromEnv("PI_JEV_ROUTER_CACHE_MAX", 64))),
+  };
+}
+
+/** Classification's own thresholds, layered on the transport settings. */
+export function loadClassifyConfig(jev: JevConfig): ClassifyConfig {
+  // PI_JEV_ROUTER_MIN_CONFIDENCE was the pre-0.2 knob. It was effectively a
+  // no-op (confidence is in [0, 1] and the default was 0), so it now serves as
+  // a shared fallback default for the two real thresholds.
+  const legacyMinConfidence = numberFromEnv("PI_JEV_ROUTER_MIN_CONFIDENCE", 0);
+
+  return {
+    ...jev,
     decompositionThreshold: clamp01(
       numberFromEnv("PI_JEV_ROUTER_DECOMPOSITION_THRESHOLD", legacyMinConfidence || 0.6),
     ),
@@ -44,8 +74,6 @@ export function loadConfig(): RouterConfig {
     ),
     premiseDefectThreshold: clamp(numberFromEnv("PI_JEV_ROUTER_PREMISE_THRESHOLD", 2.8), 0, 3),
     historyTurns: Math.max(0, Math.floor(numberFromEnv("PI_JEV_ROUTER_HISTORY_TURNS", 4))),
-    cacheTtlMs: Math.max(0, numberFromEnv("PI_JEV_ROUTER_CACHE_TTL_MS", 300_000)),
-    cacheMaxEntries: Math.max(0, Math.floor(numberFromEnv("PI_JEV_ROUTER_CACHE_MAX", 64))),
   };
 }
 

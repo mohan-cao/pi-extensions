@@ -2,14 +2,16 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 
 import {
   TtlCache,
-  classifyWithJev,
   formatCoaching,
   judgeTrajectory,
+  type TrajectoryJudgment,
+} from "@mohan-cao/jev-classifier";
+import {
+  classifyWithJev,
   policyFor,
   premisePolicyFor,
   type ClassificationResult,
-  type TrajectoryJudgment,
-} from "@mohan-cao/jev-classifier";
+} from "@mohan-cao/jev-classify";
 import { formatVerifyStatus, verifyResponse, type VerifyResult } from "@mohan-cao/jev-verify";
 import {
   PHASES,
@@ -27,7 +29,13 @@ import {
   type PhaseRouteInfo,
   type RouterState,
 } from "./commands.js";
-import { loadConfig, loadPhaseConfig, loadTrajectoryConfig, loadVerifyConfig } from "./config.js";
+import {
+  loadClassifyConfig,
+  loadConfig,
+  loadPhaseConfig,
+  loadTrajectoryConfig,
+  loadVerifyConfig,
+} from "./config.js";
 import { lastExchange, recentHistory } from "./context.js";
 import { appendDecision, decisionLogPath, type DecisionRecord } from "./decision-log.js";
 import {
@@ -57,6 +65,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
   const config = loadConfig();
   const trajectoryConfig = loadTrajectoryConfig();
   const verifyConfig = loadVerifyConfig(config);
+  const classifyConfig = loadClassifyConfig(config);
   const cache = new TtlCache<ClassificationResult>(config.cacheTtlMs, config.cacheMaxEntries);
 
   // Persisted preferences win over environment-derived defaults, so a command is
@@ -168,8 +177,8 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         `footer=${state.footer}`,
         authState,
         `model=${config.model}`,
-        `thresholds: decomp>=${config.decompositionThreshold}, bounded>=${config.boundedVerificationThreshold}`,
-        `history=${config.historyTurns} turns`,
+        `thresholds: decomp>=${classifyConfig.decompositionThreshold}, bounded>=${classifyConfig.boundedVerificationThreshold}`,
+        `history=${classifyConfig.historyTurns} turns`,
         `cache=${cache.size}/${config.cacheMaxEntries}`,
         `prefs=${preferencesPath()}`,
         `decisions=${decisionLogPath()}`,
@@ -193,7 +202,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     }
 
     try {
-      const decision = await classifyWithJev(prompt, apiKey, config, ctx.signal);
+      const decision = await classifyWithJev(prompt, apiKey, classifyConfig, ctx.signal);
       ctx.ui.notify(`Jev: ${formatDecision(decision)}`, "info");
     } catch (error) {
       ctx.ui.notify(
@@ -359,14 +368,14 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     }
 
     try {
-      const history = recentHistory(ctx, config.historyTurns, event.prompt);
+      const history = recentHistory(ctx, classifyConfig.historyTurns, event.prompt);
       const cacheKey = JSON.stringify([event.prompt, history]);
 
       let decision = cache.get(cacheKey);
       if (decision) {
         decision = { ...decision, cached: true };
       } else {
-        decision = await classifyWithJev(event.prompt, apiKey, config, ctx.signal, history);
+        decision = await classifyWithJev(event.prompt, apiKey, classifyConfig, ctx.signal, history);
         cache.set(cacheKey, decision);
       }
 
@@ -388,7 +397,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       const premisePolicy = premisePolicyFor(
         decision.mode,
         decision.signals.premiseDefect,
-        config.premiseDefectThreshold,
+        classifyConfig.premiseDefectThreshold,
       );
       if (premisePolicy) {
         event.systemPromptOptions.sections[PREMISE_SECTION] = premisePolicy;
@@ -457,31 +466,40 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
 }
 
 // Re-export the component surface so existing consumers keep working. The
-// extension is a collection: what it re-exports now spans more than one package,
-// but the public surface of this one is unchanged.
+// extension is a collection: what it re-exports now spans several packages, and
+// `RouterConfig` is this extension's own type rather than the core's.
 export {
   FOOTER_MODES,
   TRAJECTORIES,
   TtlCache,
+  formatCoaching,
+  parseChoiceAnswer,
+  parseNoulAnswer,
+  parseScoreAnswer,
+} from "@mohan-cao/jev-classifier";
+export type {
+  FooterMode,
+  HistoryTurn,
+  JevConfig,
+  Trajectory,
+  TrajectoryConfig,
+  TrajectoryJudgment,
+} from "@mohan-cao/jev-classifier";
+export {
+  RESPONSE_MODES,
   buildState,
   classifyWithJev,
   composeMode,
-  formatCoaching,
   parseClassificationResponse,
-  parseNoulAnswer,
-  parseScoreAnswer,
   policyFor,
   premisePolicyFor,
-} from "@mohan-cao/jev-classifier";
+} from "@mohan-cao/jev-classify";
 export type {
   ClassificationResult,
   ClassificationSignals,
-  FooterMode,
-  JevConfig,
+  ClassifyConfig,
   ResponseMode,
-  RouterConfig,
-  Trajectory,
-} from "@mohan-cao/jev-classifier";
+} from "@mohan-cao/jev-classify";
 export { formatVerifyStatus, verifyResponse } from "@mohan-cao/jev-verify";
 export type { VerifyConfig, VerifyFlag, VerifyResult } from "@mohan-cao/jev-verify";
 export { PHASES, formatPhaseNudge, judgePhase, phaseRecommendation } from "@mohan-cao/jev-phase";

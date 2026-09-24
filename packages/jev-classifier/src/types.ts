@@ -1,36 +1,8 @@
-export const RESPONSE_MODES = [
-  "bounded_verification",
-  "decomposition_required",
-  "normal",
-] as const;
-
-export type ResponseMode = (typeof RESPONSE_MODES)[number];
-
 export const FOOTER_MODES = ["compact", "icons", "off"] as const;
 export type FooterMode = (typeof FOOTER_MODES)[number];
 
 export const TRAJECTORIES = ["converging", "stuck_detail", "stuck_framing", "early"] as const;
 export type Trajectory = (typeof TRAJECTORIES)[number];
-
-/** Raw Jev signals that drive the composed decision, each in [0, 1]. */
-export interface ClassificationSignals {
-  /** P(the request requires decomposition before a reliable answer). */
-  decomposition: number;
-  /** P(the request is bounded verification). */
-  boundedVerification: number;
-  /** Expected severity of a false or misleading premise, 0-3. */
-  premiseDefect: number;
-}
-
-export interface ClassificationResult {
-  mode: ResponseMode;
-  /** Probability of the signal that drove the decision. */
-  confidence: number;
-  probabilities: Record<ResponseMode, number>;
-  signals: ClassificationSignals;
-  model?: string;
-  cached?: boolean;
-}
 
 /**
  * Transport settings for a Jev call.
@@ -44,34 +16,6 @@ export interface JevConfig {
   model: string;
   timeoutMs: number;
   retries: number;
-}
-
-/**
- * The classification component's config, plus transport.
- *
- * Still here rather than in a `jev-classify` package because that extraction has
- * not happened yet — which makes this the last set of preferences left in the
- * core, and the reason it is not yet preference-free.
- */
-export interface RouterConfig extends JevConfig {
-  /** P(decomposition) at or above which decomposition wins. */
-  decompositionThreshold: number;
-  /** P(bounded verification) at or above which bounded verification wins. */
-  boundedVerificationThreshold: number;
-  /** Expected premise defect (0-3) at or above which the premise is corrected. */
-  premiseDefectThreshold: number;
-  /** Number of prior conversation turns included in Jev state. 0 disables. */
-  historyTurns: number;
-  /** Classification cache TTL in ms. 0 disables caching. */
-  cacheTtlMs: number;
-  cacheMaxEntries: number;
-}
-
-/** The Jev `state` payload for classification. */
-export interface ClassificationState {
-  user_request: string;
-  /** Prior turns, flattened as `"role: text"`. Omitted when there is no history. */
-  recent_conversation?: string[];
 }
 
 /** A prior conversation turn included in the classifier state. */

@@ -29,6 +29,12 @@ importers:
 
   packages/jev-classifier: {}
 
+  packages/jev-classify:
+    dependencies:
+      '@mohan-cao/jev-classifier':
+        specifier: workspace:^
+        version: link:../jev-classifier
+
   packages/jev-phase:
     dependencies:
       '@mohan-cao/jev-classifier':
@@ -52,6 +58,9 @@ importers:
       '@mohan-cao/jev-classifier':
         specifier: workspace:^
         version: link:../jev-classifier
+      '@mohan-cao/jev-classify':
+        specifier: workspace:^
+        version: link:../jev-classify
       '@mohan-cao/jev-phase':
         specifier: workspace:^
         version: link:../jev-phase

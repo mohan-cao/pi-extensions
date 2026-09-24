@@ -2,7 +2,7 @@ import type { ResponseMode } from "./types.js";
 
 /**
  * Policy bodies are injected as a named system-prompt section (see
- * `POLICY_SECTION` in index.ts), so Pi wraps them in a
+ * `POLICY_SECTION` in the extension), so Pi wraps them in a
  * `<jev-response-policy>` tag. Do not re-add the wrapper here.
  */
 

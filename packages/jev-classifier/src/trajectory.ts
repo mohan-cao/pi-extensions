@@ -4,7 +4,7 @@ import {
   TRAJECTORIES,
   type FooterMode,
   type HistoryTurn,
-  type RouterConfig,
+  type JevConfig,
   type Trajectory,
   type TrajectoryJudgment,
 } from "./types.js";
@@ -22,7 +22,7 @@ const TRAJECTORY_ID = "trajectory";
 export async function judgeTrajectory(
   turns: HistoryTurn[],
   apiKey: string,
-  config: RouterConfig,
+  config: JevConfig,
   parentSignal?: AbortSignal,
 ): Promise<TrajectoryJudgment> {
   const payload = await callSystemOne(
