@@ -152,7 +152,13 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
 
   function describeLastTrajectory(): string {
     if (!lastTrajectory) return "none yet";
-    return `${lastTrajectory.progress}@${lastTrajectory.progressConfidence.toFixed(2)}`;
+    // The gate is on the weaker of the two answers, so that is the number that
+    // decides whether this turn counted at all.
+    const gate = Math.min(
+      lastTrajectory.advanceConfidence,
+      lastTrajectory.regressConfidence,
+    );
+    return `${lastTrajectory.progress}@${gate.toFixed(2)}`;
   }
 
   async function reportStatus(ctx: ExtensionContext): Promise<void> {
@@ -296,7 +302,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
 
       if (state.debug) {
         ctx.ui.notify(
-          `Jev progress: ${judgment.progress} (conf=${judgment.progressConfidence.toFixed(2)})`,
+          `Jev progress: ${judgment.progress} (advance=${judgment.advanceConfidence.toFixed(2)}, regress=${judgment.regressConfidence.toFixed(2)})`,
           "info",
         );
       }
