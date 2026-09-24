@@ -6,8 +6,6 @@ export {
   composeMode,
   parseClassificationResponse,
 } from "./classify.js";
-export { verifyResponse, formatVerifyStatus } from "./verify.js";
-export type { VerifyFlag, VerifyResult } from "./verify.js";
 export { judgeTrajectory, formatCoaching } from "./trajectory.js";
 export { policyFor, premisePolicyFor } from "./policies.js";
 export { TtlCache } from "./cache.js";
@@ -16,9 +14,6 @@ export {
   DECOMPOSITION_QUESTION,
   PREMISE_DEFECT_QUESTION,
   TRAJECTORY_QUESTION,
-  VERIFY_ANSWER_QUESTION,
-  VERIFY_EVASIVE_QUESTION,
-  VERIFY_OBLIGATION_QUESTION,
 } from "./questions.js";
 export type { ChoiceQuestionSpec, NoulQuestionSpec, ScoreQuestionSpec } from "./questions.js";
 export { FOOTER_MODES, RESPONSE_MODES, TRAJECTORIES } from "./types.js";
@@ -30,6 +25,7 @@ export type {
   HistoryTurn,
   JevAnswer,
   JevChoiceAnswer,
+  JevConfig,
   JevNoulAnswer,
   JevScoreAnswer,
   JevSystemOneResponse,

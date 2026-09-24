@@ -4,15 +4,13 @@ import {
   TtlCache,
   classifyWithJev,
   formatCoaching,
-  formatVerifyStatus,
   judgeTrajectory,
   policyFor,
   premisePolicyFor,
-  verifyResponse,
   type ClassificationResult,
   type TrajectoryJudgment,
-  type VerifyResult,
 } from "@mohan-cao/jev-classifier";
+import { formatVerifyStatus, verifyResponse, type VerifyResult } from "@mohan-cao/jev-verify";
 import {
   PHASES,
   formatPhaseNudge,
@@ -29,7 +27,7 @@ import {
   type PhaseRouteInfo,
   type RouterState,
 } from "./commands.js";
-import { loadConfig, loadPhaseConfig, loadTrajectoryConfig } from "./config.js";
+import { loadConfig, loadPhaseConfig, loadTrajectoryConfig, loadVerifyConfig } from "./config.js";
 import { lastExchange, recentHistory } from "./context.js";
 import { appendDecision, decisionLogPath, type DecisionRecord } from "./decision-log.js";
 import {
@@ -58,6 +56,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
 
   const config = loadConfig();
   const trajectoryConfig = loadTrajectoryConfig();
+  const verifyConfig = loadVerifyConfig(config);
   const cache = new TtlCache<ClassificationResult>(config.cacheTtlMs, config.cacheMaxEntries);
 
   // Persisted preferences win over environment-derived defaults, so a command is
@@ -71,7 +70,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
   const state: RouterState = {
     enabled: stored.enabled ?? true,
     debug: stored.debug ?? false,
-    verify: stored.verify ?? config.verify,
+    verify: stored.verify ?? verifyConfig.enabled,
     phase: stored.phase ?? true,
     coaching: stored.coaching ?? true,
     log: stored.log ?? true,
@@ -216,7 +215,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
         exchange.request,
         exchange.response,
         apiKey,
-        config,
+        verifyConfig,
         ctx.signal,
       );
 
@@ -468,24 +467,23 @@ export {
   classifyWithJev,
   composeMode,
   formatCoaching,
-  formatVerifyStatus,
   parseClassificationResponse,
   parseNoulAnswer,
   parseScoreAnswer,
   policyFor,
   premisePolicyFor,
-  verifyResponse,
 } from "@mohan-cao/jev-classifier";
 export type {
   ClassificationResult,
   ClassificationSignals,
   FooterMode,
+  JevConfig,
   ResponseMode,
   RouterConfig,
   Trajectory,
-  VerifyFlag,
-  VerifyResult,
 } from "@mohan-cao/jev-classifier";
+export { formatVerifyStatus, verifyResponse } from "@mohan-cao/jev-verify";
+export type { VerifyConfig, VerifyFlag, VerifyResult } from "@mohan-cao/jev-verify";
 export { PHASES, formatPhaseNudge, judgePhase, phaseRecommendation } from "@mohan-cao/jev-phase";
 export type {
   Phase,

@@ -32,11 +32,28 @@ export interface ClassificationResult {
   cached?: boolean;
 }
 
-export interface RouterConfig {
+/**
+ * Transport settings for a Jev call.
+ *
+ * Deliberately the *only* config the core owns. Every threshold and preference
+ * belongs to the component that uses it, so component configs extend this rather
+ * than inheriting a kitchen-sink object.
+ */
+export interface JevConfig {
   endpoint: string;
   model: string;
   timeoutMs: number;
   retries: number;
+}
+
+/**
+ * The classification component's config, plus transport.
+ *
+ * Still here rather than in a `jev-classify` package because that extraction has
+ * not happened yet — which makes this the last set of preferences left in the
+ * core, and the reason it is not yet preference-free.
+ */
+export interface RouterConfig extends JevConfig {
   /** P(decomposition) at or above which decomposition wins. */
   decompositionThreshold: number;
   /** P(bounded verification) at or above which bounded verification wins. */
@@ -48,12 +65,6 @@ export interface RouterConfig {
   /** Classification cache TTL in ms. 0 disables caching. */
   cacheTtlMs: number;
   cacheMaxEntries: number;
-  /** Whether post-generation verification runs by default. */
-  verify: boolean;
-  verifyEvasiveThreshold: number;
-  verifyAnswersThreshold: number;
-  /** Expected obligation failure (0-3) at or above which the answer is flagged. */
-  verifyObligationThreshold: number;
 }
 
 /** The Jev `state` payload for classification. */

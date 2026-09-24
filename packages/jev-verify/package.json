@@ -1,21 +1,20 @@
 {
-  "name": "@mohan-cao/pi-jev-response-router",
-  "version": "0.4.3",
-  "description": "Pi extension that uses TypeSafe Jev to route each request into bounded verification, decomposition, or normal response policy.",
+  "name": "@mohan-cao/jev-verify",
+  "version": "0.1.0",
+  "description": "Jev verification signal: did a completed response address the request, evade it, or miss its obligation.",
   "type": "module",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mohan-cao/pi-extensions.git",
-    "directory": "packages/pi-jev-response-router"
+    "directory": "packages/jev-verify"
   },
   "keywords": [
-    "pi-package",
-    "pi-extension",
     "jev",
     "typesafe-ai",
+    "system-one",
     "classifier",
-    "response-router"
+    "llm"
   ],
   "engines": {
     "node": ">=20"
@@ -32,20 +31,6 @@
       "default": "./dist/index.js"
     }
   },
-  "pi": {
-    "extensions": [
-      "./dist/index.js"
-    ]
-  },
-  "peerDependencies": {
-    "@earendil-works/pi-ai": "*",
-    "@earendil-works/pi-coding-agent": "*"
-  },
-  "dependencies": {
-    "@mohan-cao/jev-classifier": "workspace:^",
-    "@mohan-cao/jev-phase": "workspace:^",
-    "@mohan-cao/jev-verify": "workspace:^"
-  },
   "scripts": {
     "clean": "rm -rf dist",
     "build": "tsc -p tsconfig.json",
@@ -55,5 +40,8 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "@mohan-cao/jev-classifier": "workspace:^"
   }
 }
