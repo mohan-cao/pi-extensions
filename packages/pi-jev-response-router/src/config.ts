@@ -1,10 +1,5 @@
-import {
-  PHASES,
-  type Phase,
-  type PhaseConfig,
-  type RouterConfig,
-  type TrajectoryConfig,
-} from "@mohan-cao/jev-classifier";
+import { type RouterConfig, type TrajectoryConfig } from "@mohan-cao/jev-classifier";
+import { PHASES, type Phase, type PhaseConfig } from "@mohan-cao/jev-phase";
 
 function numberFromEnv(name: string, fallback: number): number {
   const value = process.env[name];

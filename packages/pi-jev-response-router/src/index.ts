@@ -1,26 +1,27 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import {
-  PHASES,
   TtlCache,
   classifyWithJev,
   formatCoaching,
-  formatPhaseNudge,
   formatVerifyStatus,
-  judgePhase,
   judgeTrajectory,
-  phaseRecommendation,
   policyFor,
   premisePolicyFor,
   verifyResponse,
   type ClassificationResult,
-  type DecisionRecord,
-  type Phase,
-  type PhaseJudgment,
-  type PhaseRecommendation,
   type TrajectoryJudgment,
   type VerifyResult,
 } from "@mohan-cao/jev-classifier";
+import {
+  PHASES,
+  formatPhaseNudge,
+  judgePhase,
+  phaseRecommendation,
+  type Phase,
+  type PhaseJudgment,
+  type PhaseRecommendation,
+} from "@mohan-cao/jev-phase";
 
 import {
   ROUTER_COMMAND_DESCRIPTION,
@@ -30,7 +31,7 @@ import {
 } from "./commands.js";
 import { loadConfig, loadPhaseConfig, loadTrajectoryConfig } from "./config.js";
 import { lastExchange, recentHistory } from "./context.js";
-import { appendDecision, decisionLogPath } from "./decision-log.js";
+import { appendDecision, decisionLogPath, type DecisionRecord } from "./decision-log.js";
 import {
   loadPreferences,
   preferencesPath,
@@ -456,23 +457,21 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
   });
 }
 
-// Re-export the core surface so existing consumers keep working.
+// Re-export the component surface so existing consumers keep working. The
+// extension is a collection: what it re-exports now spans more than one package,
+// but the public surface of this one is unchanged.
 export {
   FOOTER_MODES,
-  PHASES,
   TRAJECTORIES,
   TtlCache,
   buildState,
   classifyWithJev,
   composeMode,
   formatCoaching,
-  formatPhaseNudge,
   formatVerifyStatus,
-  judgePhase,
   parseClassificationResponse,
   parseNoulAnswer,
   parseScoreAnswer,
-  phaseRecommendation,
   policyFor,
   premisePolicyFor,
   verifyResponse,
@@ -481,15 +480,18 @@ export type {
   ClassificationResult,
   ClassificationSignals,
   FooterMode,
-  Phase,
-  PhaseConfig,
-  PhaseJudgment,
-  PhaseRecommendation,
   ResponseMode,
   RouterConfig,
   Trajectory,
   VerifyFlag,
   VerifyResult,
 } from "@mohan-cao/jev-classifier";
+export { PHASES, formatPhaseNudge, judgePhase, phaseRecommendation } from "@mohan-cao/jev-phase";
+export type {
+  Phase,
+  PhaseConfig,
+  PhaseJudgment,
+  PhaseRecommendation,
+} from "@mohan-cao/jev-phase";
 export { loadPreferences, preferencesPath, savePreferences } from "./preferences.js";
 export type { Preferences } from "./preferences.js";

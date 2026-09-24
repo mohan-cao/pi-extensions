@@ -2,18 +2,21 @@
 
 ## Package layout
 
-Two packages, split on the harness boundary:
+Three packages, split on the harness boundary and then per judgment:
 
 | package | contains |
 | --- | --- |
-| `packages/jev-classifier` | questions, transport, classification, policies, verification, cache. No harness code, no dependencies. |
-| `packages/pi-jev-response-router` | Pi hooks, credential provider, session history, preferences, footer status. |
+| `packages/jev-classifier` | Jev transport, answer parsing, question-spec types, history state. No harness code, no dependencies, no preferences. |
+| `packages/jev-phase` | The phase judgment: its question, `judgePhase`, its formatter. |
+| `packages/pi-jev-response-router` | Pi hooks, credential provider, session history, preferences, footer status, decision log. The collection. |
 
-`pi-jev-response-router` depends on `@mohan-cao/jev-classifier`. The core never sees a harness:
-it takes an API key, conversation history, and a config, and returns decisions. That is why the
-core has no dependencies and this package has no classification logic.
+`pi-jev-response-router` depends on both component packages. The core never sees a harness: it
+takes an API key, conversation history, and a transport config, and returns raw Jev answers. That
+is why the core has no dependencies and no thresholds — everything opinionated lives in a
+component or in the collection.
 
-**Publish order matters** — `jev-classifier` first, then `pi-jev-response-router`.
+**Publish order is derived, not remembered.** changesets publishes in dependency order, so the
+core goes first because the graph says so. See [Releasing](#releasing).
 
 ## Why `before_agent_start` instead of rewriting user input?
 
@@ -140,6 +143,27 @@ the **workflow filename**, renaming `publish.yml` means updating every entry. A
 package's *first* publish cannot use OIDC — npm requires the package to exist
 before a publisher can be configured for it — so bootstrap that one with a local
 `npm login && npm publish`.
+
+**A new package must be bootstrapped before it can be released.** changesets
+publishes any workspace package whose version is not on the registry, so an
+unpublished new package makes the next publish run attempt a first publish it
+cannot authenticate — failing the whole release, not just that package.
+
+changesets enforces the consequence for you: skipping a package requires skipping
+everything that depends on it, or it reports an invalid tree. So while
+`@mohan-cao/jev-phase` is unpublished, it and `@mohan-cao/pi-jev-response-router`
+are both in `ignore`, which excludes them from versioning and publishing.
+**That means the router cannot be released until the bootstrap happens.**
+
+To unblock, in order:
+
+1. `npm login && npm publish` from `packages/jev-phase` (the first publish of a
+   package cannot use OIDC, because npm requires the package to exist before a
+   trusted publisher can be configured for it).
+2. Add its trusted-publisher entry on npmjs.com — workflow filename `publish.yml`.
+3. Remove **both** entries from `ignore` in `.changeset/config.json`.
+4. Add a changeset, so the core, the new package, and the router are released in
+   dependency order in one go.
 
 Do not set `NPM_TOKEN`, or any `_authToken` in `.npmrc`: a statically configured
 token makes npm skip its OIDC exchange, which surfaces as a misleading `404` on

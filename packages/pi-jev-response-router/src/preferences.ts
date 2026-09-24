@@ -3,7 +3,8 @@ import { dirname, join } from "node:path";
 
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
-import { FOOTER_MODES, PHASES, type FooterMode, type Phase } from "@mohan-cao/jev-classifier";
+import { FOOTER_MODES, type FooterMode } from "@mohan-cao/jev-classifier";
+import { PHASES, type Phase } from "@mohan-cao/jev-phase";
 
 /**
  * Runtime toggles that survive `/reload` and new sessions.
