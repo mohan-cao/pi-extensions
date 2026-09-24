@@ -43,21 +43,55 @@ the opposite way from the trajectory hint: verify needs to be **less** permissiv
 The gate is an expected score of 1.5 on a 0–3 scale, and the failure mode is that
 confident, well-formed prose clears it whether or not the claims were checked.
 
-**But the threshold is probably not the fix.** Reading the questions, the
-obligation check asks about *the request's* premise — "if the request rested on a
-false or oversimplified premise, did the response correct it" — and about inputs
-the request omitted. The failure above is a third thing: **the response asserted
-what it had not established.** That is not evasion (the response committed hard),
-not off-topic (it answered), and not an uncorrected user premise (the premise was
-fine). Criterion 4 gestures at "the information the answer actually depends on",
-which is adjacent, but nothing asks the direct question: *does this response
-assert things it did not check?*
+**The threshold is not the fix, and neither is a new question on the same input.**
+Two findings, one from reading the questions and one from reading the wiring.
 
-So the likely fix is a **new question**, or a fourth signal, rather than a lower
-gate. A score of 0.94 reflects a model genuinely reading the response as "fully
-met", so lowering the threshold would trade false positives for this case
-instead of detecting it. Settle this before the tuning pass, since it changes
-what gets tuned.
+*The questions ask about the wrong property.* The obligation check asks about
+*the request's* premise — "if the request rested on a false or oversimplified
+premise, did the response correct it" — and about inputs the request omitted. The
+observed failure is a third thing: **the response asserted what it had not
+established.** Not evasion (it committed hard), not off-topic (it answered), not
+an uncorrected user premise (the premise was fine). Criterion 4 gestures at "the
+information the answer actually depends on", which is adjacent, but nothing asks
+the direct question: *does this response assert things it did not check?*
+
+*And the input could not answer that question anyway.* `lastExchange` returns
+`{ request, response }` as **text only**: `messageText` keeps `type === "text"`
+parts and discards everything else, so **tool calls never reach the classifier**,
+and the response is truncated at 2,000 characters. A grounding question is
+unanswerable from that input, because the evidence of grounding — what the agent
+actually read or ran — is filtered out before the classifier sees anything.
+
+So the current lens was not a mistake; it is the only thing judgeable from a
+text-only input. **The fix is a different input, not a different question.** All
+three signals read text-only history today.
+
+## The property has a name, and a literature
+
+The useful move is to separate two things that are easy to conflate:
+
+- **Truth** — *is this claim correct?* Needs the world. Not judgeable from text.
+- **Provenance** — *does this claim trace to something that establishes it?*
+  Judgeable from the transcript, because the transcript contains the agent's own
+  actions.
+
+The second is studied under a name: the **provenance gap** — tool-using agents
+"rarely specify which tool observation supports each generated claim" — plus
+claim-centric trajectory auditing ("tracking what the agent comes to believe,
+whether those claims are supported") and evidence tracing generally ("which
+evidence supported each claim, whether tool calls were justified"). The observed
+failure is squarely this: a load-bearing claim about an npm configuration,
+asserted with no action establishing it.
+
+The uncertainty family is the **wrong** tool. Semantic entropy measures *the
+model's* uncertainty, so it catches confabulation — unstable answers — not stable
+but unfounded ones. The observed failure was stated with total confidence, so low
+entropy would have marked it reliable. Self-consistency alone is likewise
+documented as insufficient, missing question-level and model-level cases.
+
+Caveat: this is research, not a library. There is a live meta-critique that
+faithfulness metrics do not measure faithfulness, and these methods assume a
+structured trajectory that this extension currently throws away.
 
 ### Keep — phase, as an indicator
 
