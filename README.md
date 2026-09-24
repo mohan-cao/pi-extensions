@@ -41,6 +41,34 @@ pnpm build      # pnpm -r build
 pnpm test       # pnpm -r test
 ```
 
+### Pre-push smoke test
+
+```bash
+pnpm smoke                 # or: node scripts/smoke.mjs
+pnpm smoke -- --runtime=wsl
+pnpm smoke -- --keep       # leave the sandbox behind for inspection
+pnpm smoke -- --no-build   # skip the build (faster, packs dist as-is)
+```
+
+Unit tests import from `dist` in the workspace. `pnpm smoke` is the other end: it packs both
+packages, installs them into a throwaway Pi agent directory, drives a real `pi --mode rpc`
+process, and asserts on what the extension prints. It exits non-zero on the first failure.
+
+Backends, cheapest first — auto-detected unless you pass `--runtime`:
+
+| Runtime | What it runs in | Notes |
+| --- | --- | --- |
+| `docker` / `podman` | `node:<major>-slim` | Full OS isolation |
+| `wsl` | The existing WSL distro | Unpacks a portable node into `~/.cache/pi-smoke` on first use; no root needed |
+| `none` | The host, in temp dirs | No extra deps; still uses a clean agent dir |
+
+`none` is not a degraded mode: a fresh `PI_CODING_AGENT_DIR` plus a fresh npm prefix already
+gives you the isolation that matters (packed artifact, no stale preferences, no workspace
+resolution). The container backends add OS isolation on top, which is what catches
+"works on my machine".
+
+No credentials and no model calls, so it is deterministic and safe to run before every push.
+
 Releases are **per-package**. Bump only the package you are releasing, then tag it with
 `<package-name>@<version>`:
 
