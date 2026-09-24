@@ -1,6 +1,6 @@
 {
   "name": "@mohan-cao/pi-jev-response-router",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "description": "Pi extension that uses TypeSafe Jev to route each request into bounded verification, decomposition, or normal response policy.",
   "type": "module",
   "license": "Apache-2.0",
