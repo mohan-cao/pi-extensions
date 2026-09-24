@@ -76,12 +76,6 @@ proportions.
 - **No eval baselines.** The old cases — `detail-spiral`, `framing-loop`,
   `design-open` — were labelled against the retired categories. Until they are
   re-baselined against the rates, this signal is **unvalidated**.
-- **The four outcomes may be too coarse, or fine enough.** An ordinal five-point
-  scale was considered: it would make the expected value continuous, which makes
-  spread meaningful, but only if the judge produces non-uniform distributions.
-  **That is measurable** — look at whether the distributions concentrate or
-  spread before adding resolution. This signal already flips near-chance at
-  three points, so more points are not obviously more information.
 - **A turn counts only when both answers are confident.** The gate is on the
   weaker of the two, which keeps one denominator and makes the rates comparable.
   Below it the turn is excluded, not forced to `held`.
