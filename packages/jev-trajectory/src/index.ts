@@ -23,6 +23,7 @@ import {
   PROGRESS,
   PROGRESS_VALUE,
   progressFrom,
+  type Progress,
   type ProgressSummary,
   type TrajectoryJudgment,
 } from "./types.js";
@@ -47,6 +48,18 @@ const REGRESS_ID = "regressed";
 const NOUL_CUTOFF = 0.5;
 
 /**
+ * The composed outcome of a judgment, at the Noul midpoint.
+ *
+ * The only place the cutoff appears, so nothing else has to know it.
+ */
+export function progressOf(judgment: TrajectoryJudgment): Progress {
+  return progressFrom(
+    judgment.advanceConfidence >= NOUL_CUTOFF,
+    judgment.regressConfidence >= NOUL_CUTOFF,
+  );
+}
+
+/**
  * Its own call, not shared with verification, classification, or the phase
  * judgment. They read different state and are conceptually independent — and
  * questions sharing a call can perturb each other.
@@ -68,19 +81,28 @@ export async function judgeTrajectory(
   const advanceConfidence = parseNoulAnswer(payload, ADVANCE_ID);
   const regressConfidence = parseNoulAnswer(payload, REGRESS_ID);
 
-  const judgment = {
-    progress: progressFrom(advanceConfidence >= NOUL_CUTOFF, regressConfidence >= NOUL_CUTOFF),
-    advanceConfidence,
-    regressConfidence,
-  };
+  const judgment = { advanceConfidence, regressConfidence };
   return payload.model ? { ...judgment, model: payload.model } : judgment;
+}
+
+/**
+ * How decisive a Noul answer is: its distance from the midpoint, as 0.5–1.
+ *
+ * A Noul carries P(true), so a *confidently false* answer has a **low**
+ * probability. Gating on the raw probability would therefore exclude every
+ * one-sided turn — a clear advance has `P(regress) ≈ 0.1`, and the minimum of the
+ * two would sit below any sensible threshold. What the gate wants is how far
+ * each answer is from a coin flip.
+ */
+function decisiveness(probability: number): number {
+  return Math.max(probability, 1 - probability);
 }
 
 /**
  * Pure arithmetic over a series of judgments, in order.
  *
- * A turn counts only when **both** answers clear `minConfidence`. Turns below it
- * are excluded rather than forced to `held`: a turn the judge could not read
+ * A turn counts only when **both** answers are decisive enough. Turns below the
+ * gate are excluded rather than forced to `held`: a turn the judge could not read
  * should not inflate the denominator, and one denominator is what makes the
  * rates comparable.
  *
@@ -92,7 +114,9 @@ export function summarizeProgress(
   minConfidence: number,
 ): ProgressSummary {
   const counted = judgments.filter(
-    (judgment) => Math.min(judgment.advanceConfidence, judgment.regressConfidence) >= minConfidence,
+    (judgment) =>
+      Math.min(decisiveness(judgment.advanceConfidence), decisiveness(judgment.regressConfidence)) >=
+      minConfidence,
   );
 
   if (counted.length === 0) {
@@ -120,12 +144,14 @@ export function summarizeProgress(
   let sum = 0;
 
   for (const judgment of counted) {
-    // Marginals of the two questions, so `mixed` counts toward both.
-    if (judgment.progress === "advanced" || judgment.progress === "mixed") advanced += 1;
-    if (judgment.progress === "regressed" || judgment.progress === "mixed") regressed += 1;
-    if (judgment.progress === "mixed") mixed += 1;
+    const progress = progressOf(judgment);
 
-    const value = PROGRESS_VALUE[judgment.progress];
+    // Marginals of the two questions, so `mixed` counts toward both.
+    if (progress === "advanced" || progress === "mixed") advanced += 1;
+    if (progress === "regressed" || progress === "mixed") regressed += 1;
+    if (progress === "mixed") mixed += 1;
+
+    const value = PROGRESS_VALUE[progress];
     sum += value;
 
     // A stall is any turn that did not net forward — `regressed` is no more

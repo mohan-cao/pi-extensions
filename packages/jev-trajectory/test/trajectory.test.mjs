@@ -7,6 +7,7 @@ import {
   REGRESS_QUESTION,
   judgeTrajectory,
   progressFrom,
+  progressOf,
   summarizeProgress,
 } from "../dist/index.js";
 
@@ -17,9 +18,9 @@ const jevConfig = {
   retries: 0,
 };
 
-/** A judgment with both answers at the same confidence. */
-function judgment(progress, confidence = 0.9) {
-  return { progress, advanceConfidence: confidence, regressConfidence: confidence };
+/** A judgment built from its two answers — there is no label to get out of step. */
+function judgment(advanceConfidence, regressConfidence) {
+  return { advanceConfidence, regressConfidence };
 }
 
 function stubAnswers(advance, regress) {
@@ -40,15 +41,21 @@ function stubAnswers(advance, regress) {
   };
 }
 
-test("PROGRESS is the documented set, with no stuck value", () => {
+test("PROGRESS is the documented set", () => {
   assert.deepEqual([...PROGRESS], ["held", "advanced", "regressed", "mixed"]);
-  assert.equal(PROGRESS.includes("stuck_detail"), false);
 });
 
-test("the questions are phase-agnostic and independent", () => {
+/**
+ * A prompt-contract test, not a behaviour test: rewording the questions
+ * invalidates the eval baselines, so the wording is pinned deliberately. The
+ * assertions name the properties the wording has to preserve.
+ */
+test("the question wording preserves the properties the eval assumes", () => {
+  // Phase-agnostic: the same answers must read correctly in build and in design.
   assert.match(ADVANCE_QUESTION.instructions, /any kind of work/);
   assert.match(ADVANCE_QUESTION.criteria.true, /converged on agreement/);
-  // The regression question must not be collapsed by the advance answer.
+  // The regression answer must not be collapsed by the advance answer, or the
+  // four outcomes collapse back to three.
   assert.match(REGRESS_QUESTION.instructions, /independently of whether/);
 });
 
@@ -59,7 +66,17 @@ test("progressFrom composes the two answers into four outcomes", () => {
   assert.equal(progressFrom(true, true), "mixed");
 });
 
-test("judgeTrajectory asks both questions in one call and composes them", async () => {
+test("progressOf applies the midpoint, and is the only place that knows it", () => {
+  assert.equal(progressOf(judgment(0.9, 0.1)), "advanced");
+  assert.equal(progressOf(judgment(0.1, 0.9)), "regressed");
+  assert.equal(progressOf(judgment(0.9, 0.9)), "mixed");
+  assert.equal(progressOf(judgment(0.1, 0.1)), "held");
+  // Exactly at the midpoint counts as yes; the reliability gate is what stops a
+  // coin flip from being counted.
+  assert.equal(progressOf(judgment(0.5, 0.5)), "mixed");
+});
+
+test("judgeTrajectory asks both questions in one call and returns both answers", async () => {
   const originalFetch = globalThis.fetch;
   const questionsSeen = [];
 
@@ -80,10 +97,10 @@ test("judgeTrajectory asks both questions in one call and composes them", async 
   try {
     const result = await judgeTrajectory([{ role: "user", text: "hi" }], "k", jevConfig);
 
-    // Both answers true of the same turn: the case a single axis could not say.
-    assert.equal(result.progress, "mixed");
+    // Both true of the same turn: the case a single axis could not say.
     assert.equal(result.advanceConfidence, 0.9);
     assert.equal(result.regressConfidence, 0.8);
+    assert.equal(progressOf(result), "mixed");
     assert.equal(result.model, "jev-1.13.0");
     assert.deepEqual(questionsSeen, [["advanced", "regressed"]]);
   } finally {
@@ -95,9 +112,28 @@ test("judgeTrajectory reads a one-sided turn correctly", async () => {
   const restore = stubAnswers(0.05, 0.95);
   try {
     const result = await judgeTrajectory([{ role: "user", text: "hi" }], "k", jevConfig);
-    assert.equal(result.progress, "regressed");
+    assert.equal(progressOf(result), "regressed");
   } finally {
     restore();
+  }
+});
+
+test("judgeTrajectory fails on a payload that is missing an answer", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({ answers: { advanced: { type: "noul", noul: 0.9 } } }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+
+  try {
+    // The caller is responsible for failing open; the judge must not invent a value.
+    await assert.rejects(
+      () => judgeTrajectory([{ role: "user", text: "hi" }], "k", jevConfig),
+      /missing answers\.regressed/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 
@@ -120,20 +156,38 @@ test("summarizeProgress excludes a turn where either answer is unsure", () => {
   // The gate is on the weaker of the two answers, so one uncertain answer is
   // enough to drop the turn — otherwise the rates would not be comparable.
   const summary = summarizeProgress(
-    [
-      judgment("advanced"),
-      { progress: "advanced", advanceConfidence: 0.95, regressConfidence: 0.4 },
-      judgment("advanced"),
-    ],
+    [judgment(0.9, 0.9), judgment(0.95, 0.4), judgment(0.9, 0.9)],
     0.7,
   );
   assert.equal(summary.counted, 2);
   assert.equal(summary.advanced, 2);
 });
 
+test("the gate is on decisiveness, not on the raw probability", () => {
+  // A clear advance is confidently NOT a regression: P(regress) is near zero.
+  // Gating on the raw probability would exclude every one-sided turn and leave
+  // the signal inert — the ratio would sit at 0/1 forever.
+  const summary = summarizeProgress([judgment(0.95, 0.05), judgment(0.05, 0.95)], 0.7);
+  assert.equal(summary.counted, 2);
+  assert.equal(summary.advanced, 1);
+  assert.equal(summary.regressed, 1);
+  assert.equal(summary.net, 0);
+
+  // 0.3 is as decisive as 0.7 — both are 0.2 from the midpoint.
+  assert.equal(summarizeProgress([judgment(0.3, 0.1)], 0.7).counted, 1);
+  // A coin flip on either answer drops the turn.
+  assert.equal(summarizeProgress([judgment(0.95, 0.5)], 0.7).counted, 0);
+  assert.equal(summarizeProgress([judgment(0.55, 0.1)], 0.7).counted, 0);
+});
+
 test("summarizeProgress reports marginals, so mixed counts toward both", () => {
   const summary = summarizeProgress(
-    [judgment("advanced"), judgment("mixed"), judgment("regressed"), judgment("held")],
+    [
+      judgment(0.9, 0.1), // advanced
+      judgment(0.9, 0.9), // mixed
+      judgment(0.1, 0.9), // regressed
+      judgment(0.1, 0.1), // held
+    ],
     0.7,
   );
 
@@ -150,7 +204,12 @@ test("summarizeProgress reports marginals, so mixed counts toward both", () => {
 test("a mixed turn cancels out of the trend, and counts as a stall", () => {
   // +1, 0, 0, -1 → net 0.
   const summary = summarizeProgress(
-    [judgment("advanced"), judgment("mixed"), judgment("held"), judgment("regressed")],
+    [
+      judgment(0.9, 0.1), // advanced
+      judgment(0.9, 0.9), // mixed
+      judgment(0.1, 0.1), // held
+      judgment(0.1, 0.9), // regressed
+    ],
     0.7,
   );
   assert.equal(summary.net, 0);
@@ -161,31 +220,37 @@ test("a mixed turn cancels out of the trend, and counts as a stall", () => {
 test("oscillation counts reversals, not pauses", () => {
   // A pause or a cancel does not change direction.
   assert.equal(
-    summarizeProgress([judgment("advanced"), judgment("mixed"), judgment("regressed")], 0.7)
+    summarizeProgress([judgment(0.9, 0.1), judgment(0.9, 0.9), judgment(0.1, 0.9)], 0.7)
       .oscillation,
     1,
   );
   assert.equal(
     summarizeProgress(
-      [judgment("advanced"), judgment("regressed"), judgment("advanced"), judgment("regressed")],
+      [judgment(0.9, 0.1), judgment(0.1, 0.9), judgment(0.9, 0.1), judgment(0.1, 0.9)],
       0.7,
     ).oscillation,
     3,
   );
   assert.equal(
-    summarizeProgress([judgment("advanced"), judgment("advanced"), judgment("held")], 0.7)
+    summarizeProgress([judgment(0.9, 0.1), judgment(0.9, 0.1), judgment(0.1, 0.1)], 0.7)
       .oscillation,
     0,
   );
 });
 
+test("a single-turn series has no oscillation and no stall", () => {
+  const summary = summarizeProgress([judgment(0.9, 0.1)], 0.7);
+  assert.equal(summary.oscillation, 0);
+  assert.equal(summary.longestStall, 0);
+});
+
 test("a correction cycle and a spiral differ in the rates, not in a verdict", () => {
   const cycle = summarizeProgress(
-    [judgment("mixed"), judgment("mixed"), judgment("advanced")],
+    [judgment(0.9, 0.9), judgment(0.9, 0.9), judgment(0.9, 0.1)],
     0.7,
   );
   const spiral = summarizeProgress(
-    [judgment("regressed"), judgment("regressed"), judgment("held")],
+    [judgment(0.1, 0.9), judgment(0.1, 0.9), judgment(0.1, 0.1)],
     0.7,
   );
 

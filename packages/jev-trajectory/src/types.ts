@@ -34,9 +34,15 @@ export const PROGRESS_VALUE = {
   advanced: 1,
 } satisfies Record<Progress, number>;
 
-/** What the progress judge observed on one settled turn. */
+/**
+ * What the progress judge observed on one settled turn.
+ *
+ * Deliberately carries **only the two answers**, not a composed label. A label
+ * here would be derived state that the type cannot keep consistent with its
+ * inputs, and anything reading it would have to trust that they agree. Compose
+ * with `progressOf` instead.
+ */
 export interface TrajectoryJudgment {
-  progress: Progress;
   /** P(the turn advanced the work). */
   advanceConfidence: number;
   /** P(the turn reopened or undid something). */
@@ -49,7 +55,12 @@ export interface TrajectoryConfig extends JevConfig {
   /** Conversation turns supplied to the progress judge. */
   historyTurns: number;
   /**
-   * Minimum confidence for **both** answers before a turn counts at all.
+   * Minimum **decisiveness** for both answers before a turn counts at all.
+   *
+   * A Noul carries P(true), so decisiveness is its distance from the midpoint —
+   * 0.7 means each answer is at least 70% sure of itself. Gating on the raw
+   * probability instead would exclude every one-sided turn, since a clear advance
+   * has `P(regress) ≈ 0.1`.
    *
    * Gating on the weaker of the two keeps a single denominator, which is what
    * makes the rates comparable with one another. Below it the turn is excluded

@@ -9,16 +9,20 @@ npm install @mohan-cao/jev-trajectory
 ```
 
 ```ts
-import { judgeTrajectory, summarizeProgress } from "@mohan-cao/jev-trajectory";
+import { judgeTrajectory, progressOf, summarizeProgress } from "@mohan-cao/jev-trajectory";
 
 const judgment = await judgeTrajectory(turns, apiKey, jevConfig);
-// { progress: "mixed", advanceConfidence: 0.9, regressConfidence: 0.8 }
+// { advanceConfidence: 0.9, regressConfidence: 0.8 }
+progressOf(judgment); // "mixed"
 
 summarizeProgress(series, 0.7);
 // { counted: 8, advanced: 4, regressed: 3, mixed: 2,
 //   advancedRate: 0.5, regressedRate: 0.375, mixedRate: 0.25,
 //   net: 0.125, oscillation: 2, longestStall: 3 }
 ```
+
+A judgment carries **only the two answers**. The composed label is derived by
+`progressOf`, so it cannot drift out of step with the confidences it came from.
 
 ## Two questions, not one scale
 
@@ -76,9 +80,12 @@ proportions.
 - **No eval baselines.** The old cases — `detail-spiral`, `framing-loop`,
   `design-open` — were labelled against the retired categories. Until they are
   re-baselined against the rates, this signal is **unvalidated**.
-- **A turn counts only when both answers are confident.** The gate is on the
-  weaker of the two, which keeps one denominator and makes the rates comparable.
-  Below it the turn is excluded, not forced to `held`.
+- **A turn counts only when both answers are decisive enough.** The gate is on
+  **decisiveness** — distance from the midpoint — not on the raw probability. A
+  clear advance has `P(regress) ≈ 0.1`, so gating on the probability would exclude
+  every one-sided turn and leave the signal inert. The weaker of the two decides,
+  which keeps one denominator and makes the rates comparable. Below it the turn is
+  excluded, not forced to `held`.
 - **Sensitivity falls as the stretch lengthens.** A three-turn spiral inside a
   forty-turn stretch barely moves the rates. If that becomes a problem the fix is
   a second, shorter measure alongside this one.

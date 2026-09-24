@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { TtlCache } from "@mohan-cao/jev-classifier";
-import { judgeTrajectory, type TrajectoryJudgment } from "@mohan-cao/jev-trajectory";
+import { judgeTrajectory, progressOf, type TrajectoryJudgment } from "@mohan-cao/jev-trajectory";
 import {
   classifyWithJev,
   policyFor,
@@ -158,7 +158,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
       lastTrajectory.advanceConfidence,
       lastTrajectory.regressConfidence,
     );
-    return `${lastTrajectory.progress}@${gate.toFixed(2)}`;
+    return `${progressOf(lastTrajectory)}@${gate.toFixed(2)}`;
   }
 
   async function reportStatus(ctx: ExtensionContext): Promise<void> {
@@ -302,7 +302,7 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
 
       if (state.debug) {
         ctx.ui.notify(
-          `Jev progress: ${judgment.progress} (advance=${judgment.advanceConfidence.toFixed(2)}, regress=${judgment.regressConfidence.toFixed(2)})`,
+          `Jev progress: ${progressOf(judgment)} (advance=${judgment.advanceConfidence.toFixed(2)}, regress=${judgment.regressConfidence.toFixed(2)})`,
           "info",
         );
       }
