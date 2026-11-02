@@ -28,7 +28,24 @@ const DECOMPOSITION_QUESTION = {
   },
 };
 
+// Kept in step with `packages/jev-classify/src/questions.ts`. The shipped
+// wording once over-included any request with one-to-three concrete questions,
+// so a conversational meta-question to the assistant scored bounded-verify and
+// carried the verdict-list policy. A/B against it:
 const BOUNDED_VERIFICATION_QUESTION = {
+  type: "noul",
+  instructions:
+    "Does this request present at most three concrete, independently evaluable claims to be verified, such that a useful response is a direct correct / partially-correct / incorrect verdict per claim plus only the corrections that matter? Judge the substance of the request, not its sentence form: a claim stays in scope when it is stated as a question.",
+  criteria: {
+    true: "At most three concrete, independently checkable claims about the work's subject matter, stated as assertions or factual questions, where what the user needs is the verdict list itself.",
+    false:
+      "Questions addressed to the assistant itself — asking what it can see, how it is configured, or why it behaved some way — are conversation, not verification work, because the useful response is a direct answer rather than verdicts. Also false: open-ended requests, design, planning, recommendation, or tradeoff analysis, and requests with more than three checkable claims.",
+  },
+};
+
+// The over-including wording, for A/B. Matches what shipped in jev-classify
+// before the meta-question misfire.
+const BOUNDED_VERIFICATION_QUESTION_OLD = {
   type: "noul",
   instructions:
     "Does this request contain at most three concrete, independently evaluable claims or questions that can each be answered with a direct correct / partially-correct / incorrect verdict?",
@@ -227,6 +244,8 @@ const REQUESTS = {
   "pg-vs-mysql":
     "I need to implement a high performance DB backend, would you recommend postgres or mysql",
   "udp-boundaries": "UDP preserves datagram boundaries, right?",
+  "meta-visibility":
+    "hmm interesting, are you seeing my steering in prompt? I'm adding some things like classify my type of input given the type of input I provide using a Jev-based classifier.",
   "udp-reliable-false":
     "Since UDP is reliable and ordered, which databases use it for replication?",
   "pg-vs-redis": "Should we replace Postgres with Redis?",
@@ -237,6 +256,7 @@ const PRE_CASES = [
   { id: "moq-basis", expect: "decomp mid · premise ~0 (level 2)" },
   { id: "pg-vs-mysql", expect: "decomp HIGH (underdetermined) · premise low" },
   { id: "udp-boundaries", expect: "bounded high · premise ~0" },
+  { id: "meta-visibility", expect: "bounded low (question to the assistant) · normal" },
   { id: "udp-reliable-false", expect: "premise HIGH (level 3)" },
   { id: "pg-vs-redis", expect: "decomp high · premise low" },
 ];
@@ -456,8 +476,9 @@ function choiceConfidence(payload, id) {
 const pad = (value, width) => String(value).padEnd(width);
 const f3 = (value) => value.toFixed(3);
 
-async function runPre() {
-  console.log("\n=== PRE-GEN (request only) ===");
+async function runPre(label, boundedQuestion) {
+  const bounded = boundedQuestion ?? BOUNDED_VERIFICATION_QUESTION;
+  console.log(`\n=== PRE-GEN (request only) — ${label ?? "shipped question"} ===`);
   console.log(
     `${pad("case", 20)}${pad("decomp", 8)}${pad("bounded", 8)}${pad("P(p=3)", 8)}${pad("E[p]", 6)}expectation`,
   );
@@ -467,7 +488,7 @@ async function runPre() {
       { user_request: REQUESTS[testCase.id] },
       {
         requires_decomposition: DECOMPOSITION_QUESTION,
-        bounded_verification: BOUNDED_VERIFICATION_QUESTION,
+        bounded_verification: bounded,
         premise_defect: PREMISE_DEFECT_QUESTION,
       },
     );
@@ -618,8 +639,11 @@ try {
     await runSessionWithHistory("CURRENT main questions", DECOMPOSITION_QUESTION_CURRENT, true);
     await runSessionWithHistory("PROPOSED questions", DECOMPOSITION_QUESTION, true);
     await runSessionWithHistory("V3 insulated wording", DECOMPOSITION_QUESTION_V3);
+  } else if (process.argv.includes("--pre-only")) {
+    await runPre("shipped wording", BOUNDED_VERIFICATION_QUESTION_OLD);
+    await runPre("reworded", BOUNDED_VERIFICATION_QUESTION);
   } else {
-    await runPre();
+    await runPre("shipped question");
     await runPost("v1", VERIFY_ANSWER_QUESTION, VERIFY_EVASIVE_QUESTION);
     await runPost("v2", VERIFY_ANSWER_QUESTION_V2, VERIFY_EVASIVE_QUESTION_V2);
     await runSession("CURRENT main questions", DECOMPOSITION_QUESTION_CURRENT);
