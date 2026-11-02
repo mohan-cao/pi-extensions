@@ -56,7 +56,4 @@ Question and threshold calibration runs against the live API through
 node --env-file=.env scripts/jev-eval.mjs
 ```
 
-See [the phase and progress design notes](./docs/design/phase-recommendation.md)
-for the decisions those signals carry.
-
 :3
