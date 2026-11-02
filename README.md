@@ -56,13 +56,7 @@ Question and threshold calibration runs against the live API through
 node --env-file=.env scripts/jev-eval.mjs
 ```
 
-:3
-
-## Project status
-
-All four signals run in pi as shipped: response policy, verification, phase,
-and progress. Calibration rests on synthetic case sets. The progress signal
-has no baselines, so its README marks it unvalidated.
-
 See [the phase and progress design notes](./docs/design/phase-recommendation.md)
 for the decisions those signals carry.
+
+:3
