@@ -55,5 +55,3 @@ Question and threshold calibration runs against the live API through
 ```sh
 node --env-file=.env scripts/jev-eval.mjs
 ```
-
-:3
