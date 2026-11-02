@@ -1,7 +1,13 @@
 # pi-extensions
 
-Welcome to my abode! Signal packages for the TypeSafe Jev classifier, and one
-pi extension that applies them.
+:3
+
+welcome... to my abode..
+
+my collection of slop..
+
+Signal packages for the TypeSafe Jev classifier, and one pi extension that
+applies them.
 
 Each turn of a pi coding session gets classified before the run and judged
 after it. The classification pins a policy into the system prompt. The
