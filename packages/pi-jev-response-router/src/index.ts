@@ -349,6 +349,12 @@ export default function piJevResponseRouter(pi: ExtensionAPI): void {
     delete event.systemPromptOptions.sections[POLICY_SECTION];
     delete event.systemPromptOptions.sections[PREMISE_SECTION];
 
+    // `BeforeAgentStartEvent` is a union on `messageType`. Only a user prompt
+    // carries `prompt`; a run started by `pi.sendMessage(..., triggerTurn)`
+    // carries `message` instead. There is nothing to classify, so skip before
+    // any use of `event.prompt`.
+    if (event.messageType !== "user") return;
+
     pending = { at: new Date().toISOString() };
 
     if (!state.enabled || !event.prompt.trim()) return;
