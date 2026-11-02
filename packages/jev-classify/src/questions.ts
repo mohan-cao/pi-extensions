@@ -24,11 +24,11 @@ export const DECOMPOSITION_QUESTION: NoulQuestionSpec = {
 export const BOUNDED_VERIFICATION_QUESTION: NoulQuestionSpec = {
   type: "noul",
   instructions:
-    "Does this request contain at most three concrete, independently evaluable claims or questions that can each be answered with a direct correct / partially-correct / incorrect verdict followed only by the corrections that matter?",
+    "Does this request present at most three concrete, independently evaluable claims to be verified, such that a useful response is a direct correct / partially-correct / incorrect verdict per claim plus only the corrections that matter? Judge the substance of the request, not its sentence form: a claim stays in scope when it is stated as a question.",
   criteria: {
-    true: "At most three concrete claims or questions, each independently checkable, where a useful answer is essentially a verdict plus concise corrections.",
+    true: "At most three concrete, independently checkable claims about the work's subject matter, stated as assertions or factual questions, where what the user needs is the verdict list itself.",
     false:
-      "The request is open-ended, asks for design, planning, recommendation, or tradeoff analysis, or contains more than three checkable claims.",
+      "Questions addressed to the assistant itself — asking what it can see, how it is configured, or why it behaved some way — are conversation, not verification work, because the useful response is a direct answer rather than verdicts. Also false: open-ended requests, design, planning, recommendation, or tradeoff analysis, and requests with more than three checkable claims.",
   },
 };
 
