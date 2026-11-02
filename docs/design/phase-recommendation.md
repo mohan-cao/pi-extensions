@@ -4,6 +4,8 @@
 > now lives in `@mohan-cao/jev-phase`, and the coaching hint described below as `stuck_detail`
 > / `stuck_framing` has been replaced by a two-question progress ratio with no `stuck`
 > verdicts at all. The phase reasoning still stands; the trajectory material does not.
+> Routing the phase signal into model selection is a separate decision:
+> see [`virtual-model-reconciliation.md`](./virtual-model-reconciliation.md).
 
 **Status:** implemented on `feat/footer-signals` — questions, judgment, deterministic
 comparison, and Pi footer wiring. Thresholds are calibrated against the transition eval set in
