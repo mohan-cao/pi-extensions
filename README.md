@@ -1,7 +1,7 @@
 # pi-extensions
 
-Signal packages for the TypeSafe Jev classifier, and one pi extension that
-applies them.
+Welcome to my abode! Signal packages for the TypeSafe Jev classifier, and one
+pi extension that applies them.
 
 Each turn of a pi coding session gets classified before the run and judged
 after it. The classification pins a policy into the system prompt. The
@@ -49,6 +49,8 @@ Question and threshold calibration runs against the live API through
 ```sh
 node --env-file=.env scripts/jev-eval.mjs
 ```
+
+:3
 
 ## Project status
 
