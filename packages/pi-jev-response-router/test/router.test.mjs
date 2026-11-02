@@ -378,6 +378,111 @@ test("ProgressTally applies the confidence gate, and off renders nothing", () =>
   assert.equal(tally.format("icons", 0.7), "1/1");
 });
 
+test("before_agent_start skips the classification of a custom-message run", async () => {
+  await withAgentDir(async () => {
+    const handlers = new Map();
+    const pi = {
+      registerCommand() {},
+      registerProvider() {},
+      on(event, handler) {
+        handlers.set(event, handler);
+        return () => {};
+      },
+    };
+    piJevResponseRouter(pi);
+    const handler = handlers.get("before_agent_start");
+
+    const sections = {
+      "jev-response-policy": "stale",
+      "jev-premise-policy": "stale",
+      "unrelated-section": "kept",
+    };
+    const authLookups = [];
+    const notifications = [];
+    const ctx = {
+      hasUI: true,
+      ui: {
+        notify: (message, type) => notifications.push({ message, type }),
+        setStatus: () => {},
+      },
+      modelRegistry: {
+        getProviderAuth: async (provider) => {
+          authLookups.push(provider);
+          return { auth: { apiKey: "test-key" } };
+        },
+      },
+      signal: undefined,
+    };
+
+    // A run started by `pi.sendMessage(..., triggerTurn)` carries `message`,
+    // not `prompt`. Without the guard the handler reads `event.prompt` and
+    // throws for every such run.
+    await handler(
+      {
+        type: "before_agent_start",
+        messageType: "custom",
+        systemPrompt: "",
+        systemPromptOptions: { sections },
+      },
+      ctx,
+    );
+
+    // The two policy sections clear, so no stale policy reaches the run.
+    // Sections the router does not own stay untouched.
+    assert.equal(sections["jev-response-policy"], undefined);
+    assert.equal(sections["jev-premise-policy"], undefined);
+    assert.equal(sections["unrelated-section"], "kept");
+    // The guard short-circuits before the auth lookup, so nothing classifies.
+    assert.deepEqual(authLookups, []);
+    assert.deepEqual(notifications, []);
+  });
+});
+
+test("before_agent_start still mutates sections for a user prompt", async () => {
+  await withAgentDir(async () => {
+    const handlers = new Map();
+    const pi = {
+      registerCommand() {},
+      registerProvider() {},
+      on(event, handler) {
+        handlers.set(event, handler);
+        return () => {};
+      },
+    };
+    piJevResponseRouter(pi);
+    const handler = handlers.get("before_agent_start");
+
+    const sections = {};
+    const notifications = [];
+    const ctx = {
+      hasUI: true,
+      ui: {
+        notify: (message, type) => notifications.push({ message, type }),
+        setStatus: () => {},
+      },
+      modelRegistry: {
+        getProviderAuth: async () => undefined,
+      },
+      signal: undefined,
+    };
+
+    // No prompt, no policy: an empty prompt returns before an auth lookup too.
+    await handler(
+      {
+        type: "before_agent_start",
+        messageType: "user",
+        prompt: "   ",
+        systemPrompt: "",
+        systemPromptOptions: { sections },
+      },
+      ctx,
+    );
+
+    assert.deepEqual(sections, {});
+    assert.deepEqual(notifications, []);
+  });
+});
+
 test("ProgressTally.reset clears the series", () => {
   const tally = new ProgressTally();
   tally.record(ADVANCED, "build");
